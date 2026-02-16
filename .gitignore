@@ -29,5 +29,9 @@ htmlcov/
 # uv
 uv.lock
 
+# Claude Code
+.claude/
+plans/
+
 # OS
 .DS_Store
