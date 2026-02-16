@@ -14,7 +14,7 @@ class Settings(BaseSettings):
 
     # LLM Provider
     llm_provider: str = "openrouter"
-    llm_model: str = "gpt-oss-120b"
+    llm_model: str = "openai/gpt-oss-120b:free"
     openrouter_api_key: str = ""
     openai_api_key: str = ""
     anthropic_api_key: str = ""

@@ -483,7 +483,7 @@ make eval                  # python scripts/run_eval.py
 ```env
 # LLM Provider: openrouter | openai | anthropic
 LLM_PROVIDER=openrouter
-LLM_MODEL=gpt-oss-120b
+LLM_MODEL=openai/gpt-oss-120b:free
 OPENROUTER_API_KEY=your-key-here
 
 # Optional: switch providers
@@ -515,7 +515,7 @@ COST_ALERT_THRESHOLD_DAILY_USD=10
 ## トレードオフ方針
 
 ### 品質 vs コスト
-- デフォルトはOpenRouter無料モデル (gpt-oss-120b)。品質要件に応じてプロバイダ/モデルを切替
+- デフォルトはOpenRouter無料モデル (openai/gpt-oss-120b:free)。品質要件に応じてプロバイダ/モデルを切替
 - セマンティックキャッシュで同一・類似クエリのAPI呼び出しを削減
 - Embedding はローカルvLLM実行でAPI費用ゼロ
 
