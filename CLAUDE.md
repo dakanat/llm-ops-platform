@@ -221,6 +221,7 @@ llm-ops-platform/
 ## 開発ルール
 
 ### コーディング規約
+- **uv必須**: `python`, `pip`, `pip3` コマンドを直接使用しない。すべて `uv run` 経由で実行する（例: `uv run python`, `uv run pytest`）。パッケージ追加は `uv add`、削除は `uv remove` を使用
 - **型ヒント必須**: すべての関数に型アノテーションを付与。mypyでチェック
 - **SQLModel**: テーブル定義は `SQLModel, table=True`。APIスキーマは `SQLModel` or `BaseModel`
 - **async/await**: I/O処理はすべて非同期。`httpx.AsyncClient`, `asyncpg`
