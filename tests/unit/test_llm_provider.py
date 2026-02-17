@@ -1,5 +1,9 @@
 """Tests for LLM provider Protocol, data models, and OpenRouter implementation."""
 
+from __future__ import annotations
+
+from collections.abc import AsyncGenerator
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -106,7 +110,7 @@ class TestOpenRouterProviderComplete:
     def provider(self) -> OpenRouterProvider:
         return OpenRouterProvider(api_key="test-api-key")
 
-    def _mock_response(self, data: dict) -> MagicMock:
+    def _mock_response(self, data: dict[str, Any]) -> MagicMock:
         """httpx.Response のモックを作成。"""
         mock_resp = MagicMock(spec=httpx.Response)
         mock_resp.json.return_value = data
@@ -249,7 +253,7 @@ class TestOpenRouterProviderStream:
         mock_response = MagicMock()
         mock_response.raise_for_status = MagicMock()
 
-        async def mock_aiter_lines():
+        async def mock_aiter_lines() -> AsyncGenerator[bytes, None]:
             for line in lines:
                 yield line
 
@@ -282,7 +286,7 @@ class TestOpenRouterProviderStream:
         mock_response = MagicMock()
         mock_response.raise_for_status = MagicMock()
 
-        async def mock_aiter_lines():
+        async def mock_aiter_lines() -> AsyncGenerator[bytes, None]:
             for line in lines:
                 yield line
 
@@ -315,7 +319,7 @@ class TestOpenRouterProviderStream:
         mock_response = MagicMock()
         mock_response.raise_for_status = MagicMock()
 
-        async def mock_aiter_lines():
+        async def mock_aiter_lines() -> AsyncGenerator[bytes, None]:
             for line in lines:
                 yield line
 
