@@ -57,9 +57,12 @@ class TestHealthEndpoint:
 
     def test_health_returns_200(self) -> None:
         """GET /health が 200 と {"status": "ok"} を返すこと。"""
-        from src.main import app
+        from src.config import Settings
+        from src.main import create_app
 
-        client = TestClient(app)
+        test_settings = Settings(rate_limit_enabled=False)
+        test_app = create_app(test_settings)
+        client = TestClient(test_app)
         response = client.get("/health")
 
         assert response.status_code == 200

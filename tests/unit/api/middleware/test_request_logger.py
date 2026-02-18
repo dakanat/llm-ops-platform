@@ -11,21 +11,21 @@ from unittest.mock import AsyncMock
 
 import pytest
 import structlog
+from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from src.api.middleware.request_logger import RequestLoggerMiddleware
-from src.main import app
 from src.monitoring.logger import request_id_ctx_var, setup_logging
 from starlette.types import Receive, Scope, Send
 
 
 @pytest.fixture(autouse=True)
-def _reset_state() -> Iterator[None]:
+def _reset_state(test_app: FastAPI) -> Iterator[None]:
     """Reset structlog and dependency overrides after each test."""
     structlog.reset_defaults()
     structlog.contextvars.clear_contextvars()
     request_id_ctx_var.set(None)
     yield
-    app.dependency_overrides.clear()
+    test_app.dependency_overrides.clear()
     structlog.reset_defaults()
     structlog.contextvars.clear_contextvars()
     request_id_ctx_var.set(None)
@@ -172,7 +172,7 @@ class TestRequestLogging:
 class TestContextVarsPropagation:
     """リクエストスコープでの contextvars 伝播。"""
 
-    async def test_request_id_in_context_during_request(self) -> None:
+    async def test_request_id_in_context_during_request(self, test_app: FastAPI) -> None:
         """リクエスト処理中に request_id が contextvars にバインドされること。"""
         captured_request_id: str | None = None
 
@@ -186,17 +186,19 @@ class TestContextVarsPropagation:
             captured_request_id = request_id_ctx_var.get()
             return {"request_id": captured_request_id}
 
-        app.include_router(temp_router)
+        test_app.include_router(temp_router)
         try:
             async with AsyncClient(
-                transport=ASGITransport(app=app), base_url="http://test"
+                transport=ASGITransport(app=test_app), base_url="http://test"
             ) as client:
                 response = await client.get("/test-ctx", headers={"x-request-id": "ctx-test-id"})
             assert response.status_code == 200
             assert captured_request_id == "ctx-test-id"
         finally:
             # Remove the temporary route
-            app.routes[:] = [r for r in app.routes if getattr(r, "path", None) != "/test-ctx"]
+            test_app.routes[:] = [
+                r for r in test_app.routes if getattr(r, "path", None) != "/test-ctx"
+            ]
 
     async def test_request_id_cleared_after_request(self, client: AsyncClient) -> None:
         """リクエスト完了後に request_id がクリアされること。"""

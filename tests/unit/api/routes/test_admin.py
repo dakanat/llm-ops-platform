@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock
 
+from fastapi import FastAPI
 from httpx import AsyncClient
 from src.api.middleware.auth import TokenPayload
-from src.main import app
 from src.monitoring.cost_tracker import CostReport, CostTracker, ModelCostSummary
 
 
@@ -27,6 +27,7 @@ def _mock_cost_tracker(
 
 
 def _override_dependencies(
+    app: FastAPI,
     user: TokenPayload | None = None,
     cost_tracker: CostTracker | None = None,
     admin_user: TokenPayload | None = None,
@@ -42,18 +43,20 @@ def _override_dependencies(
 class TestAdminMetricsRoute:
     """GET /admin/metrics のテスト。"""
 
-    async def test_metrics_returns_200(self, client: AsyncClient, admin_user: TokenPayload) -> None:
+    async def test_metrics_returns_200(
+        self, client: AsyncClient, admin_user: TokenPayload, test_app: FastAPI
+    ) -> None:
         """200 が返ること。"""
-        _override_dependencies(admin_user=admin_user)
+        _override_dependencies(test_app, admin_user=admin_user)
         response = await client.get("/admin/metrics")
 
         assert response.status_code == 200
 
     async def test_metrics_returns_prometheus_content_type(
-        self, client: AsyncClient, admin_user: TokenPayload
+        self, client: AsyncClient, admin_user: TokenPayload, test_app: FastAPI
     ) -> None:
         """Prometheus 形式の Content-Type が返ること。"""
-        _override_dependencies(admin_user=admin_user)
+        _override_dependencies(test_app, admin_user=admin_user)
         response = await client.get("/admin/metrics")
 
         assert "text/plain" in response.headers["content-type"]
@@ -65,10 +68,10 @@ class TestAdminMetricsRoute:
         assert response.status_code in (401, 403)
 
     async def test_metrics_returns_403_for_user_role(
-        self, client: AsyncClient, user_role: TokenPayload
+        self, client: AsyncClient, user_role: TokenPayload, test_app: FastAPI
     ) -> None:
         """user ロールで 403 が返ること。"""
-        _override_dependencies(user=user_role)
+        _override_dependencies(test_app, user=user_role)
         response = await client.get("/admin/metrics")
 
         assert response.status_code == 403
@@ -77,25 +80,27 @@ class TestAdminMetricsRoute:
 class TestAdminCostsRoute:
     """GET /admin/costs のテスト。"""
 
-    async def test_costs_returns_200(self, client: AsyncClient, admin_user: TokenPayload) -> None:
+    async def test_costs_returns_200(
+        self, client: AsyncClient, admin_user: TokenPayload, test_app: FastAPI
+    ) -> None:
         """200 が返ること。"""
-        _override_dependencies(admin_user=admin_user)
+        _override_dependencies(test_app, admin_user=admin_user)
         response = await client.get("/admin/costs")
 
         assert response.status_code == 200
 
     async def test_costs_returns_total_cost(
-        self, client: AsyncClient, admin_user: TokenPayload
+        self, client: AsyncClient, admin_user: TokenPayload, test_app: FastAPI
     ) -> None:
         """total_cost がレスポンスに含まれること。"""
         tracker = _mock_cost_tracker(total_cost=12.5)
-        _override_dependencies(cost_tracker=tracker, admin_user=admin_user)
+        _override_dependencies(test_app, cost_tracker=tracker, admin_user=admin_user)
         response = await client.get("/admin/costs")
 
         assert response.json()["total_cost"] == 12.5
 
     async def test_costs_returns_model_costs(
-        self, client: AsyncClient, admin_user: TokenPayload
+        self, client: AsyncClient, admin_user: TokenPayload, test_app: FastAPI
     ) -> None:
         """model_costs がレスポンスに含まれること。"""
         model_costs = {
@@ -103,7 +108,7 @@ class TestAdminCostsRoute:
             "gpt-3.5": ModelCostSummary(cost=2.0, requests=50),
         }
         tracker = _mock_cost_tracker(total_cost=10.0, model_costs=model_costs)
-        _override_dependencies(cost_tracker=tracker, admin_user=admin_user)
+        _override_dependencies(test_app, cost_tracker=tracker, admin_user=admin_user)
         response = await client.get("/admin/costs")
 
         resp_costs = response.json()["model_costs"]
@@ -113,21 +118,21 @@ class TestAdminCostsRoute:
         assert resp_costs["gpt-3.5"]["requests"] == 50
 
     async def test_costs_returns_alert_triggered_false(
-        self, client: AsyncClient, admin_user: TokenPayload
+        self, client: AsyncClient, admin_user: TokenPayload, test_app: FastAPI
     ) -> None:
         """アラート未発生時に alert_triggered が false であること。"""
         tracker = _mock_cost_tracker(alert_triggered=False)
-        _override_dependencies(cost_tracker=tracker, admin_user=admin_user)
+        _override_dependencies(test_app, cost_tracker=tracker, admin_user=admin_user)
         response = await client.get("/admin/costs")
 
         assert response.json()["alert_triggered"] is False
 
     async def test_costs_returns_alert_triggered_true(
-        self, client: AsyncClient, admin_user: TokenPayload
+        self, client: AsyncClient, admin_user: TokenPayload, test_app: FastAPI
     ) -> None:
         """アラート発生時に alert_triggered が true であること。"""
         tracker = _mock_cost_tracker(alert_triggered=True)
-        _override_dependencies(cost_tracker=tracker, admin_user=admin_user)
+        _override_dependencies(test_app, cost_tracker=tracker, admin_user=admin_user)
         response = await client.get("/admin/costs")
 
         assert response.json()["alert_triggered"] is True
@@ -139,10 +144,10 @@ class TestAdminCostsRoute:
         assert response.status_code in (401, 403)
 
     async def test_costs_returns_403_for_viewer_role(
-        self, client: AsyncClient, viewer_user: TokenPayload
+        self, client: AsyncClient, viewer_user: TokenPayload, test_app: FastAPI
     ) -> None:
         """viewer ロールで 403 が返ること。"""
-        _override_dependencies(user=viewer_user)
+        _override_dependencies(test_app, user=viewer_user)
         response = await client.get("/admin/costs")
 
         assert response.status_code == 403

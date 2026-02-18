@@ -13,42 +13,58 @@ from src.api.routes.rag import router as rag_router
 from src.config import Settings
 from src.monitoring.logger import setup_logging
 
-settings = Settings()
-setup_logging(log_level=settings.log_level)
 
-app = FastAPI(
-    title="LLM Ops Platform",
-    description="Production-ready LLM application platform",
-    version="0.1.0",
-)
+def create_app(settings: Settings | None = None) -> FastAPI:
+    """Create and configure a FastAPI application.
 
-# Create Redis client for rate limiting (only when enabled)
-_rate_limit_redis = None
-if settings.rate_limit_enabled:
-    from redis.asyncio import Redis
+    Args:
+        settings: Application settings. If None, a new Settings instance is
+            created from environment variables.
 
-    _rate_limit_redis = Redis.from_url(settings.redis_url)
+    Returns:
+        Configured FastAPI application.
+    """
+    if settings is None:
+        settings = Settings()
+    setup_logging(log_level=settings.log_level)
 
-# Middleware registration order: last added = outermost = runs first.
-# Execution order: RequestLogger -> RateLimit -> PIIFilter -> routes
-app.add_middleware(PIIFilterMiddleware, enabled=settings.pii_detection_enabled)  # type: ignore[arg-type,unused-ignore]
-app.add_middleware(
-    RateLimitMiddleware,  # type: ignore[arg-type,unused-ignore]  # Starlette typing issue
-    redis_client=_rate_limit_redis,
-    enabled=settings.rate_limit_enabled,
-    requests_per_minute=settings.rate_limit_requests_per_minute,
-    burst_size=settings.rate_limit_burst_size,
-)
-app.add_middleware(RequestLoggerMiddleware)  # type: ignore[arg-type,unused-ignore]  # Starlette typing issue
+    application = FastAPI(
+        title="LLM Ops Platform",
+        description="Production-ready LLM application platform",
+        version="0.1.0",
+    )
 
-app.include_router(chat_router)
-app.include_router(rag_router)
-app.include_router(agent_router)
-app.include_router(eval_router)
-app.include_router(admin_router)
+    # Create Redis client for rate limiting (only when enabled)
+    _rate_limit_redis = None
+    if settings.rate_limit_enabled:
+        from redis.asyncio import Redis
+
+        _rate_limit_redis = Redis.from_url(settings.redis_url)
+
+    # Middleware registration order: last added = outermost = runs first.
+    # Execution order: RequestLogger -> RateLimit -> PIIFilter -> routes
+    application.add_middleware(PIIFilterMiddleware, enabled=settings.pii_detection_enabled)  # type: ignore[arg-type,unused-ignore]
+    application.add_middleware(
+        RateLimitMiddleware,  # type: ignore[arg-type,unused-ignore]  # Starlette typing issue
+        redis_client=_rate_limit_redis,
+        enabled=settings.rate_limit_enabled,
+        requests_per_minute=settings.rate_limit_requests_per_minute,
+        burst_size=settings.rate_limit_burst_size,
+    )
+    application.add_middleware(RequestLoggerMiddleware)  # type: ignore[arg-type,unused-ignore]  # Starlette typing issue
+
+    application.include_router(chat_router)
+    application.include_router(rag_router)
+    application.include_router(agent_router)
+    application.include_router(eval_router)
+    application.include_router(admin_router)
+
+    @application.get("/health")
+    async def health() -> dict[str, str]:
+        """Health check endpoint."""
+        return {"status": "ok"}
+
+    return application
 
 
-@app.get("/health")
-async def health() -> dict[str, str]:
-    """Health check endpoint."""
-    return {"status": "ok"}
+app = create_app()

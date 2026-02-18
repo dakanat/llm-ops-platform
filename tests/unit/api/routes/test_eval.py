@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock
 
+from fastapi import FastAPI
 from httpx import AsyncClient
 from src.api.middleware.auth import TokenPayload
 from src.eval import EvalError
 from src.eval.datasets import EvalExample
 from src.eval.runner import EvalRunResult, ExampleResult, MetricSummary
-from src.main import app
 
 
 def _make_eval_run_result(
@@ -47,6 +47,7 @@ def _mock_eval_runner(result: EvalRunResult | None = None) -> AsyncMock:
 
 
 def _override_dependencies(
+    app: FastAPI,
     runner: AsyncMock | None = None,
     user: TokenPayload | None = None,
     admin_user: TokenPayload | None = None,
@@ -75,10 +76,10 @@ class TestEvalRunRoute:
     """POST /eval/run のテスト。"""
 
     async def test_returns_200_with_valid_dataset(
-        self, client: AsyncClient, admin_user: TokenPayload
+        self, client: AsyncClient, admin_user: TokenPayload, test_app: FastAPI
     ) -> None:
         """有効なデータセットで 200 が返ること。"""
-        _override_dependencies(admin_user=admin_user)
+        _override_dependencies(test_app, admin_user=admin_user)
         response = await client.post(
             "/eval/run",
             json={"dataset_name": "test-dataset", "examples": _VALID_EXAMPLES},
@@ -87,12 +88,12 @@ class TestEvalRunRoute:
         assert response.status_code == 200
 
     async def test_returns_dataset_name(
-        self, client: AsyncClient, admin_user: TokenPayload
+        self, client: AsyncClient, admin_user: TokenPayload, test_app: FastAPI
     ) -> None:
         """dataset_name がレスポンスに含まれること。"""
         result = _make_eval_run_result(dataset_name="my-dataset")
         runner = _mock_eval_runner(result=result)
-        _override_dependencies(runner=runner, admin_user=admin_user)
+        _override_dependencies(test_app, runner=runner, admin_user=admin_user)
         response = await client.post(
             "/eval/run",
             json={"dataset_name": "my-dataset", "examples": _VALID_EXAMPLES},
@@ -101,10 +102,10 @@ class TestEvalRunRoute:
         assert response.json()["dataset_name"] == "my-dataset"
 
     async def test_returns_results_with_scores(
-        self, client: AsyncClient, admin_user: TokenPayload
+        self, client: AsyncClient, admin_user: TokenPayload, test_app: FastAPI
     ) -> None:
         """各結果にスコアが含まれること。"""
-        _override_dependencies(admin_user=admin_user)
+        _override_dependencies(test_app, admin_user=admin_user)
         response = await client.post(
             "/eval/run",
             json={"dataset_name": "test-dataset", "examples": _VALID_EXAMPLES},
@@ -116,13 +117,15 @@ class TestEvalRunRoute:
         assert results[0]["relevance_score"] == 0.85
 
     async def test_returns_faithfulness_summary(
-        self, client: AsyncClient, admin_user: TokenPayload
+        self, client: AsyncClient, admin_user: TokenPayload, test_app: FastAPI
     ) -> None:
         """faithfulness_summary がレスポンスに含まれること。"""
         result = _make_eval_run_result(
             faithfulness_summary=MetricSummary(mean=0.95, count=2),
         )
-        _override_dependencies(runner=_mock_eval_runner(result=result), admin_user=admin_user)
+        _override_dependencies(
+            test_app, runner=_mock_eval_runner(result=result), admin_user=admin_user
+        )
         response = await client.post(
             "/eval/run",
             json={"dataset_name": "test-dataset", "examples": _VALID_EXAMPLES},
@@ -133,13 +136,15 @@ class TestEvalRunRoute:
         assert summary["count"] == 2
 
     async def test_returns_relevance_summary(
-        self, client: AsyncClient, admin_user: TokenPayload
+        self, client: AsyncClient, admin_user: TokenPayload, test_app: FastAPI
     ) -> None:
         """relevance_summary がレスポンスに含まれること。"""
         result = _make_eval_run_result(
             relevance_summary=MetricSummary(mean=0.8, count=3),
         )
-        _override_dependencies(runner=_mock_eval_runner(result=result), admin_user=admin_user)
+        _override_dependencies(
+            test_app, runner=_mock_eval_runner(result=result), admin_user=admin_user
+        )
         response = await client.post(
             "/eval/run",
             json={"dataset_name": "test-dataset", "examples": _VALID_EXAMPLES},
@@ -150,11 +155,11 @@ class TestEvalRunRoute:
         assert summary["count"] == 3
 
     async def test_passes_dataset_to_runner(
-        self, client: AsyncClient, admin_user: TokenPayload
+        self, client: AsyncClient, admin_user: TokenPayload, test_app: FastAPI
     ) -> None:
         """データセットが EvalRunner.run() に渡されること。"""
         runner = _mock_eval_runner()
-        _override_dependencies(runner=runner, admin_user=admin_user)
+        _override_dependencies(test_app, runner=runner, admin_user=admin_user)
         await client.post(
             "/eval/run",
             json={"dataset_name": "test-dataset", "examples": _VALID_EXAMPLES},
@@ -167,10 +172,10 @@ class TestEvalRunRoute:
         assert dataset.examples[0].query == "What is RAG?"
 
     async def test_returns_422_for_missing_dataset_name(
-        self, client: AsyncClient, admin_user: TokenPayload
+        self, client: AsyncClient, admin_user: TokenPayload, test_app: FastAPI
     ) -> None:
         """dataset_name がない場合に 422 が返ること。"""
-        _override_dependencies(admin_user=admin_user)
+        _override_dependencies(test_app, admin_user=admin_user)
         response = await client.post(
             "/eval/run",
             json={"examples": _VALID_EXAMPLES},
@@ -179,10 +184,10 @@ class TestEvalRunRoute:
         assert response.status_code == 422
 
     async def test_returns_422_for_missing_examples(
-        self, client: AsyncClient, admin_user: TokenPayload
+        self, client: AsyncClient, admin_user: TokenPayload, test_app: FastAPI
     ) -> None:
         """examples がない場合に 422 が返ること。"""
-        _override_dependencies(admin_user=admin_user)
+        _override_dependencies(test_app, admin_user=admin_user)
         response = await client.post(
             "/eval/run",
             json={"dataset_name": "test-dataset"},
@@ -191,10 +196,10 @@ class TestEvalRunRoute:
         assert response.status_code == 422
 
     async def test_returns_422_for_empty_examples(
-        self, client: AsyncClient, admin_user: TokenPayload
+        self, client: AsyncClient, admin_user: TokenPayload, test_app: FastAPI
     ) -> None:
         """空の examples で 422 が返ること。"""
-        _override_dependencies(admin_user=admin_user)
+        _override_dependencies(test_app, admin_user=admin_user)
         response = await client.post(
             "/eval/run",
             json={"dataset_name": "test-dataset", "examples": []},
@@ -203,12 +208,12 @@ class TestEvalRunRoute:
         assert response.status_code == 422
 
     async def test_returns_502_when_eval_fails(
-        self, client: AsyncClient, admin_user: TokenPayload
+        self, client: AsyncClient, admin_user: TokenPayload, test_app: FastAPI
     ) -> None:
         """EvalError 発生時に 502 が返ること。"""
         runner = _mock_eval_runner()
         runner.run.side_effect = EvalError("Evaluation failed")
-        _override_dependencies(runner=runner, admin_user=admin_user)
+        _override_dependencies(test_app, runner=runner, admin_user=admin_user)
         response = await client.post(
             "/eval/run",
             json={"dataset_name": "test-dataset", "examples": _VALID_EXAMPLES},
@@ -226,10 +231,10 @@ class TestEvalRunRoute:
         assert response.status_code in (401, 403)
 
     async def test_returns_403_for_viewer_role(
-        self, client: AsyncClient, viewer_user: TokenPayload
+        self, client: AsyncClient, viewer_user: TokenPayload, test_app: FastAPI
     ) -> None:
         """viewer ロールで 403 が返ること。"""
-        _override_dependencies(user=viewer_user)
+        _override_dependencies(test_app, user=viewer_user)
         response = await client.post(
             "/eval/run",
             json={"dataset_name": "test-dataset", "examples": _VALID_EXAMPLES},
