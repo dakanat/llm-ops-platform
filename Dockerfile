@@ -2,7 +2,7 @@ FROM python:3.12-slim AS base
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir uv
+RUN pip install --no-cache-dir uv==0.9.30
 
 COPY pyproject.toml ./
 RUN uv sync --no-dev --no-install-project
