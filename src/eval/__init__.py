@@ -10,3 +10,11 @@ class EvalError(Exception):
 
 class MetricError(EvalError):
     """個別メトリクスの評価に関するエラー。"""
+
+
+class DatasetError(EvalError):
+    """データセットの読み込み・バリデーションに関するエラー。"""
+
+
+class RegressionError(EvalError):
+    """回帰テストに関するエラー。"""
