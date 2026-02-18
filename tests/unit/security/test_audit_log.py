@@ -13,6 +13,15 @@ import pytest
 from src.db.models import AuditLog
 from src.security.audit_log import create_audit_log, log_action
 
+
+def _make_session() -> AsyncMock:
+    """session.add() が同期メソッドである AsyncSession のモックを作成する。"""
+    session = AsyncMock()
+    # session.add() is synchronous — use MagicMock to avoid unawaited coroutine warning
+    session.add = MagicMock()
+    return session
+
+
 # --- create_audit_log ---
 
 
@@ -21,7 +30,7 @@ class TestCreateAuditLog:
 
     @pytest.mark.asyncio
     async def test_returns_audit_log_instance(self) -> None:
-        session = AsyncMock()
+        session = _make_session()
         user_id = uuid.uuid4()
         result = await create_audit_log(
             session=session,
@@ -34,7 +43,7 @@ class TestCreateAuditLog:
 
     @pytest.mark.asyncio
     async def test_fields_are_set_correctly(self) -> None:
-        session = AsyncMock()
+        session = _make_session()
         user_id = uuid.uuid4()
         result = await create_audit_log(
             session=session,
@@ -52,7 +61,7 @@ class TestCreateAuditLog:
 
     @pytest.mark.asyncio
     async def test_default_details_is_empty_dict(self) -> None:
-        session = AsyncMock()
+        session = _make_session()
         result = await create_audit_log(
             session=session,
             user_id=uuid.uuid4(),
@@ -64,7 +73,7 @@ class TestCreateAuditLog:
 
     @pytest.mark.asyncio
     async def test_session_add_called(self) -> None:
-        session = AsyncMock()
+        session = _make_session()
         await create_audit_log(
             session=session,
             user_id=uuid.uuid4(),
@@ -76,7 +85,7 @@ class TestCreateAuditLog:
 
     @pytest.mark.asyncio
     async def test_session_flush_called(self) -> None:
-        session = AsyncMock()
+        session = _make_session()
         await create_audit_log(
             session=session,
             user_id=uuid.uuid4(),
@@ -89,7 +98,7 @@ class TestCreateAuditLog:
     @pytest.mark.asyncio
     async def test_session_commit_not_called(self) -> None:
         """create_audit_log は commit しない (呼び出し元が制御)。"""
-        session = AsyncMock()
+        session = _make_session()
         await create_audit_log(
             session=session,
             user_id=uuid.uuid4(),
@@ -108,7 +117,7 @@ class TestLogAction:
 
     @pytest.mark.asyncio
     async def test_returns_audit_log(self) -> None:
-        session = AsyncMock()
+        session = _make_session()
         result = await log_action(
             session=session,
             user_id=uuid.uuid4(),
@@ -120,7 +129,7 @@ class TestLogAction:
 
     @pytest.mark.asyncio
     async def test_emits_structlog_event(self) -> None:
-        session = AsyncMock()
+        session = _make_session()
         user_id = uuid.uuid4()
 
         with patch("src.security.audit_log.get_logger") as mock_get_logger:
@@ -147,7 +156,7 @@ class TestLogAction:
 
     @pytest.mark.asyncio
     async def test_delegates_to_create_audit_log(self) -> None:
-        session = AsyncMock()
+        session = _make_session()
         user_id = uuid.uuid4()
 
         with patch(
