@@ -44,9 +44,15 @@ def get_llm_router(
 
 def get_llm_provider(
     router: Annotated[LLMRouter, Depends(get_llm_router)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> LLMProvider:
-    """Return the configured LLM provider."""
-    return router.get_provider()
+    """Return the configured LLM provider, wrapped with PII sanitizer if enabled."""
+    from src.llm.pii_sanitizing_provider import PIISanitizingProvider
+
+    provider = router.get_provider()
+    if settings.pii_detection_enabled and settings.pii_mask_llm_outbound:
+        return PIISanitizingProvider(inner=provider)
+    return provider
 
 
 def get_llm_model(
@@ -76,7 +82,11 @@ async def get_rag_pipeline(
             vector_store=vector_store,
         )
         retriever = Retriever(embedder=embedder, vector_store=vector_store)
-        provider = LLMRouter(settings=settings).get_provider()
+        provider: LLMProvider = LLMRouter(settings=settings).get_provider()
+        if settings.pii_detection_enabled and settings.pii_mask_llm_outbound:
+            from src.llm.pii_sanitizing_provider import PIISanitizingProvider
+
+            provider = PIISanitizingProvider(inner=provider)
         generator = Generator(
             llm_provider=provider,
             model=settings.llm_model,

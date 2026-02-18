@@ -2,7 +2,6 @@
 
 from fastapi import FastAPI
 
-from src.api.middleware.pii_filter import PIIFilterMiddleware
 from src.api.middleware.rate_limit import RateLimitMiddleware
 from src.api.middleware.request_logger import RequestLoggerMiddleware
 from src.api.routes.admin import router as admin_router
@@ -26,7 +25,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     """
     if settings is None:
         settings = Settings()
-    setup_logging(log_level=settings.log_level)
+    setup_logging(
+        log_level=settings.log_level,
+        pii_mask_logs=settings.pii_detection_enabled and settings.pii_mask_logs,
+    )
 
     application = FastAPI(
         title="LLM Ops Platform",
@@ -42,8 +44,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         _rate_limit_redis = Redis.from_url(settings.redis_url)
 
     # Middleware registration order: last added = outermost = runs first.
-    # Execution order: RequestLogger -> RateLimit -> PIIFilter -> routes
-    application.add_middleware(PIIFilterMiddleware, enabled=settings.pii_detection_enabled)  # type: ignore[arg-type,unused-ignore]
+    # Execution order: RequestLogger -> RateLimit -> routes
     application.add_middleware(
         RateLimitMiddleware,  # type: ignore[arg-type,unused-ignore]  # Starlette typing issue
         redis_client=_rate_limit_redis,

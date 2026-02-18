@@ -33,7 +33,9 @@ class Settings(BaseSettings):
     jwt_secret_key: str = "change-me-in-production"
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 30
-    pii_detection_enabled: bool = True
+    pii_detection_enabled: bool = True  # PII保護機能全体のマスタースイッチ
+    pii_mask_llm_outbound: bool = True  # LLM API送信前のマスク
+    pii_mask_logs: bool = True  # ログ出力前のマスク
     prompt_injection_detection_enabled: bool = True
 
     # Semantic Cache

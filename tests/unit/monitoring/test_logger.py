@@ -187,3 +187,53 @@ class TestRequestIdContextVar:
         """set() / get() で値を読み書きできること。"""
         request_id_ctx_var.set("req-456")
         assert request_id_ctx_var.get() == "req-456"
+
+
+# =============================================================================
+# PII masking integration
+# =============================================================================
+
+
+def _capture_json_log_with_pii(*, pii_mask_logs: bool) -> dict[str, Any]:
+    """Setup logging with PII masking setting and emit a log with PII data."""
+    setup_logging(log_level="DEBUG", pii_mask_logs=pii_mask_logs)
+
+    stream = StringIO()
+    handler = logging.StreamHandler(stream)
+    handler.setLevel(logging.DEBUG)
+
+    root = logging.getLogger()
+    if root.handlers:
+        handler.setFormatter(root.handlers[0].formatter)
+    root.addHandler(handler)
+
+    try:
+        logger = get_logger()
+        logger.info("user_action", user_input="連絡先: user@example.com")
+
+        output = stream.getvalue().strip()
+        last_line = output.split("\n")[-1]
+        parsed: dict[str, Any] = json.loads(last_line)
+        return parsed
+    finally:
+        root.removeHandler(handler)
+
+
+class TestPIIMaskingIntegration:
+    """PII masking プロセッサが structlog パイプラインに統合されていること。"""
+
+    def test_pii_masked_when_enabled(self) -> None:
+        """pii_mask_logs=True のとき、ログ出力にPIIが含まれないこと。"""
+        data = _capture_json_log_with_pii(pii_mask_logs=True)
+        assert "user@example.com" not in data["user_input"]
+        assert "[EMAIL]" in data["user_input"]
+
+    def test_pii_not_masked_when_disabled(self) -> None:
+        """pii_mask_logs=False のとき、ログ出力にPIIがそのまま含まれること。"""
+        data = _capture_json_log_with_pii(pii_mask_logs=False)
+        assert "user@example.com" in data["user_input"]
+
+    def test_event_key_not_masked(self) -> None:
+        """event キーの値はマスクされないこと (構造的キーの免除)。"""
+        data = _capture_json_log_with_pii(pii_mask_logs=True)
+        assert data["event"] == "user_action"

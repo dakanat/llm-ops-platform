@@ -15,14 +15,17 @@ from typing import cast
 
 import structlog
 
+from src.monitoring.pii_log_processor import create_pii_masking_processor
+
 request_id_ctx_var: ContextVar[str | None] = ContextVar("request_id", default=None)
 
 
-def setup_logging(log_level: str = "INFO") -> None:
+def setup_logging(log_level: str = "INFO", *, pii_mask_logs: bool = True) -> None:
     """Configure structlog and stdlib logging for JSON structured output.
 
     Args:
         log_level: Root log level (DEBUG, INFO, WARNING, ERROR, CRITICAL).
+        pii_mask_logs: Whether to mask PII in log output values.
     """
     shared_processors: list[structlog.types.Processor] = [
         structlog.contextvars.merge_contextvars,
@@ -31,6 +34,7 @@ def setup_logging(log_level: str = "INFO") -> None:
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
+        create_pii_masking_processor(enabled=pii_mask_logs),
     ]
 
     structlog.configure(

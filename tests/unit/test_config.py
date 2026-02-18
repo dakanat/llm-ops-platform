@@ -22,6 +22,8 @@ class TestSettings:
         )
         assert settings.redis_url == "redis://redis:6379/0"
         assert settings.pii_detection_enabled is True
+        assert settings.pii_mask_llm_outbound is True
+        assert settings.pii_mask_logs is True
         assert settings.prompt_injection_detection_enabled is True
         assert settings.log_level == "INFO"
         assert settings.cost_alert_threshold_daily_usd == 10
@@ -41,6 +43,20 @@ class TestSettings:
         assert settings.llm_model == "gpt-4o"
         assert settings.log_level == "DEBUG"
         assert settings.cost_alert_threshold_daily_usd == 50
+
+    def test_pii_mask_settings_overridden_by_env_vars(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """PII マスク設定が環境変数で上書きできること。"""
+        monkeypatch.setenv("PII_MASK_LLM_OUTBOUND", "false")
+        monkeypatch.setenv("PII_MASK_LOGS", "false")
+
+        from src.config import Settings
+
+        settings = Settings()
+
+        assert settings.pii_mask_llm_outbound is False
+        assert settings.pii_mask_logs is False
 
     def test_settings_jwt_secret_key_has_default(self) -> None:
         """JWT_SECRET_KEY にデフォルト値が設定されていること。"""
