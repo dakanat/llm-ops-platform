@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 from fastapi import Depends
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from src.api.middleware.auth import TokenPayload, get_current_user
 from src.config import Settings
+
+if TYPE_CHECKING:
+    from src.agent.tools.registry import ToolRegistry
+    from src.eval.runner import EvalRunner
+    from src.monitoring.cost_tracker import CostTracker
 from src.db.session import get_session
 from src.db.vector_store import VectorStore
 from src.llm.providers.base import LLMProvider
@@ -83,3 +88,37 @@ async def get_rag_pipeline(
         )
     finally:
         await embedder.close()
+
+
+def get_tool_registry() -> ToolRegistry:
+    """Return a ToolRegistry with default tools registered."""
+    from src.agent.tools.calculator import CalculatorTool
+    from src.agent.tools.registry import ToolRegistry as _ToolRegistry
+
+    registry = _ToolRegistry()
+    registry.register(CalculatorTool())
+    return registry
+
+
+def get_eval_runner() -> EvalRunner:
+    """Return an EvalRunner (no metrics by default — they require LLM)."""
+    from src.eval.runner import EvalRunner as _EvalRunner
+
+    return _EvalRunner()
+
+
+_cost_tracker: CostTracker | None = None
+
+
+def get_cost_tracker(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> CostTracker:
+    """Return a module-level CostTracker singleton."""
+    from src.monitoring.cost_tracker import CostTracker as _CostTracker
+
+    global _cost_tracker  # noqa: PLW0603
+    if _cost_tracker is None:
+        _cost_tracker = _CostTracker(
+            alert_threshold_daily_usd=settings.cost_alert_threshold_daily_usd,
+        )
+    return _cost_tracker

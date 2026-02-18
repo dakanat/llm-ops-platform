@@ -4,7 +4,10 @@ from fastapi import FastAPI
 
 from src.api.middleware.pii_filter import PIIFilterMiddleware
 from src.api.middleware.request_logger import RequestLoggerMiddleware
+from src.api.routes.admin import router as admin_router
+from src.api.routes.agent import router as agent_router
 from src.api.routes.chat import router as chat_router
+from src.api.routes.eval import router as eval_router
 from src.api.routes.rag import router as rag_router
 from src.config import Settings
 from src.monitoring.logger import setup_logging
@@ -23,6 +26,9 @@ app.add_middleware(PIIFilterMiddleware, enabled=settings.pii_detection_enabled) 
 
 app.include_router(chat_router)
 app.include_router(rag_router)
+app.include_router(agent_router)
+app.include_router(eval_router)
+app.include_router(admin_router)
 
 
 @app.get("/health")
