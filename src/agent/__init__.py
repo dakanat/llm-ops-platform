@@ -18,3 +18,11 @@ class DuplicateToolError(ToolError):
 
 class ToolExecutionError(ToolError):
     """ツール実行時のエラー。"""
+
+
+class AgentError(Exception):
+    """Agent 実行に関する基底エラー。"""
+
+
+class AgentParseError(AgentError):
+    """LLM 出力のパースに失敗した場合のエラー。"""
