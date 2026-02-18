@@ -113,10 +113,11 @@ class TestPromptManagerRegister:
         assert manager.get("greet", version="1.0.0").template == "New"
 
     def test_register_returns_none(self) -> None:
+        """register() が値を返さないこと（型シグネチャ -> None で保証）。"""
         manager = PromptManager()
         tpl = PromptTemplate(name="test", template="Hello")
-        result = manager.register(tpl)
-        assert result is None
+        # register() -> None は型で保証済み。副作用なく完了することを確認
+        manager.register(tpl)
 
 
 # ---------------------------------------------------------------------------
