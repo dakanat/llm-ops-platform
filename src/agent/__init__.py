@@ -26,3 +26,7 @@ class AgentError(Exception):
 
 class AgentParseError(AgentError):
     """LLM 出力のパースに失敗した場合のエラー。"""
+
+
+class GuardrailError(AgentError):
+    """ガードレールによって入力または出力がブロックされた場合のエラー。"""
