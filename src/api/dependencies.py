@@ -8,6 +8,7 @@ from typing import Annotated
 from fastapi import Depends
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from src.api.middleware.auth import TokenPayload, get_current_user
 from src.config import Settings
 from src.db.session import get_session
 from src.db.vector_store import VectorStore
@@ -20,6 +21,8 @@ from src.rag.index_manager import IndexManager
 from src.rag.pipeline import RAGPipeline
 from src.rag.preprocessor import Preprocessor
 from src.rag.retriever import Retriever
+
+CurrentUser = Annotated[TokenPayload, Depends(get_current_user)]
 
 
 def get_settings() -> Settings:

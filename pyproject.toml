@@ -64,5 +64,6 @@ module = [
     "pgvector.*",
     "jose.*",
     "passlib.*",
+    "bcrypt.*",
 ]
 ignore_missing_imports = true
