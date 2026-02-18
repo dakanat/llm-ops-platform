@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import ast
 import operator
-from typing import Any, ClassVar
+from typing import Any
 
 from src.agent.tools.base import ToolResult
 
@@ -74,8 +74,8 @@ class CalculatorTool:
     関数呼び出し、属性アクセス、import 等は AST レベルで拒否する。
     """
 
-    name: ClassVar[str] = "calculator"
-    description: ClassVar[str] = "Evaluate a mathematical expression safely."
+    name: str = "calculator"
+    description: str = "Evaluate a mathematical expression safely."
 
     async def execute(self, input_text: str) -> ToolResult:
         """数式を評価して結果を返す。

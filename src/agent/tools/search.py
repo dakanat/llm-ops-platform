@@ -5,8 +5,6 @@ RAGPipeline を利用してベクトル検索と回答生成を実行する。
 
 from __future__ import annotations
 
-from typing import ClassVar
-
 from src.agent.tools.base import ToolResult
 from src.rag.pipeline import RAGPipeline, RAGPipelineError
 
@@ -18,8 +16,8 @@ class SearchTool:
     回答を生成する。結果にはソースチャンクの引用を含む。
     """
 
-    name: ClassVar[str] = "search"
-    description: ClassVar[str] = (
+    name: str = "search"
+    description: str = (
         "Search documents using RAG pipeline. "
         "Input is a natural language query. "
         "Returns an answer with source references."

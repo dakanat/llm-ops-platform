@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, ClassVar
+from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -77,8 +77,8 @@ class DatabaseTool:
     結果は JSON 形式で返す。
     """
 
-    name: ClassVar[str] = "database"
-    description: ClassVar[str] = (
+    name: str = "database"
+    description: str = (
         "Execute a read-only SQL query against the database. "
         "Only SELECT statements are allowed. "
         "Input is a SQL SELECT query string."
