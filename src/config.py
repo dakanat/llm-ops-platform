@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     pii_detection_enabled: bool = True
     prompt_injection_detection_enabled: bool = True
 
+    # Semantic Cache
+    cache_ttl_seconds: int = 3600
+    cache_similarity_threshold: float = 0.95
+    cache_enabled: bool = True
+
     # Monitoring
     log_level: str = "INFO"
     cost_alert_threshold_daily_usd: int = 10
