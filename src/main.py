@@ -2,6 +2,7 @@
 
 from fastapi import FastAPI
 
+from src.api.middleware.pii_filter import PIIFilterMiddleware
 from src.api.middleware.request_logger import RequestLoggerMiddleware
 from src.api.routes.chat import router as chat_router
 from src.api.routes.rag import router as rag_router
@@ -18,6 +19,7 @@ app = FastAPI(
 )
 
 app.add_middleware(RequestLoggerMiddleware)  # type: ignore[arg-type,unused-ignore]  # Starlette typing issue
+app.add_middleware(PIIFilterMiddleware, enabled=settings.pii_detection_enabled)  # type: ignore[arg-type,unused-ignore]
 
 app.include_router(chat_router)
 app.include_router(rag_router)
