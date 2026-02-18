@@ -74,26 +74,23 @@ def _find_log_event(logs: list[dict[str, Any]], event: str) -> dict[str, Any] | 
 class TestRequestIdGeneration:
     """リクエストIDの生成・ヘッダー伝播。"""
 
-    async def test_generates_request_id_when_no_header(self) -> None:
+    async def test_generates_request_id_when_no_header(self, client: AsyncClient) -> None:
         """X-Request-ID ヘッダーがない場合にUUIDが生成されること。"""
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            response = await client.get("/health")
+        response = await client.get("/health")
 
         request_id = response.headers.get("x-request-id")
         assert request_id is not None
         assert len(request_id) == 36  # UUID4 format
 
-    async def test_uses_provided_request_id_header(self) -> None:
+    async def test_uses_provided_request_id_header(self, client: AsyncClient) -> None:
         """X-Request-ID ヘッダーが提供された場合にそれを使用すること。"""
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            response = await client.get("/health", headers={"x-request-id": "custom-id-123"})
+        response = await client.get("/health", headers={"x-request-id": "custom-id-123"})
 
         assert response.headers.get("x-request-id") == "custom-id-123"
 
-    async def test_response_contains_x_request_id_header(self) -> None:
+    async def test_response_contains_x_request_id_header(self, client: AsyncClient) -> None:
         """レスポンスに X-Request-ID ヘッダーが含まれること。"""
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            response = await client.get("/health")
+        response = await client.get("/health")
 
         assert "x-request-id" in response.headers
 
@@ -106,31 +103,28 @@ class TestRequestIdGeneration:
 class TestRequestLogging:
     """リクエスト開始・完了ログの出力。"""
 
-    async def test_logs_request_started_event(self) -> None:
+    async def test_logs_request_started_event(self, client: AsyncClient) -> None:
         """request_started イベントがログ出力されること。"""
         stream = _setup_log_capture()
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            await client.get("/health")
+        await client.get("/health")
 
         logs = _parse_log_lines(stream)
         started = _find_log_event(logs, "request_started")
         assert started is not None
 
-    async def test_logs_request_completed_event(self) -> None:
+    async def test_logs_request_completed_event(self, client: AsyncClient) -> None:
         """request_completed イベントがログ出力されること。"""
         stream = _setup_log_capture()
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            await client.get("/health")
+        await client.get("/health")
 
         logs = _parse_log_lines(stream)
         completed = _find_log_event(logs, "request_completed")
         assert completed is not None
 
-    async def test_request_started_contains_method_and_path(self) -> None:
+    async def test_request_started_contains_method_and_path(self, client: AsyncClient) -> None:
         """request_started ログに method と path が含まれること。"""
         stream = _setup_log_capture()
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            await client.get("/health")
+        await client.get("/health")
 
         logs = _parse_log_lines(stream)
         started = _find_log_event(logs, "request_started")
@@ -138,33 +132,30 @@ class TestRequestLogging:
         assert started["method"] == "GET"
         assert started["path"] == "/health"
 
-    async def test_request_completed_contains_status_code(self) -> None:
+    async def test_request_completed_contains_status_code(self, client: AsyncClient) -> None:
         """request_completed ログに status_code が含まれること。"""
         stream = _setup_log_capture()
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            await client.get("/health")
+        await client.get("/health")
 
         logs = _parse_log_lines(stream)
         completed = _find_log_event(logs, "request_completed")
         assert completed is not None
         assert completed["status_code"] == 200
 
-    async def test_request_completed_contains_duration_ms(self) -> None:
+    async def test_request_completed_contains_duration_ms(self, client: AsyncClient) -> None:
         """request_completed ログに duration_ms が含まれること。"""
         stream = _setup_log_capture()
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            await client.get("/health")
+        await client.get("/health")
 
         logs = _parse_log_lines(stream)
         completed = _find_log_event(logs, "request_completed")
         assert completed is not None
         assert "duration_ms" in completed
 
-    async def test_duration_ms_is_positive_number(self) -> None:
+    async def test_duration_ms_is_positive_number(self, client: AsyncClient) -> None:
         """duration_ms が正の数値であること。"""
         stream = _setup_log_capture()
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            await client.get("/health")
+        await client.get("/health")
 
         logs = _parse_log_lines(stream)
         completed = _find_log_event(logs, "request_completed")
@@ -207,10 +198,9 @@ class TestContextVarsPropagation:
             # Remove the temporary route
             app.routes[:] = [r for r in app.routes if getattr(r, "path", None) != "/test-ctx"]
 
-    async def test_request_id_cleared_after_request(self) -> None:
+    async def test_request_id_cleared_after_request(self, client: AsyncClient) -> None:
         """リクエスト完了後に request_id がクリアされること。"""
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            await client.get("/health", headers={"x-request-id": "temp-id"})
+        await client.get("/health", headers={"x-request-id": "temp-id"})
 
         assert request_id_ctx_var.get() is None
 
@@ -244,10 +234,9 @@ class TestNonHttpScopes:
 class TestMiddlewareWithExistingEndpoints:
     """既存エンドポイントとの統合。"""
 
-    async def test_health_endpoint_returns_200_with_request_id(self) -> None:
+    async def test_health_endpoint_returns_200_with_request_id(self, client: AsyncClient) -> None:
         """GET /health が 200 を返し X-Request-ID ヘッダーが含まれること。"""
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            response = await client.get("/health")
+        response = await client.get("/health")
 
         assert response.status_code == 200
         assert response.json() == {"status": "ok"}
