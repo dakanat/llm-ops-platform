@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     cache_similarity_threshold: float = 0.95
     cache_enabled: bool = True
 
+    # Rate Limiting
+    rate_limit_enabled: bool = True
+    rate_limit_requests_per_minute: int = 60
+    rate_limit_burst_size: int = 10
+
     # Monitoring
     log_level: str = "INFO"
     cost_alert_threshold_daily_usd: int = 10

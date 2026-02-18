@@ -3,6 +3,7 @@
 from fastapi import FastAPI
 
 from src.api.middleware.pii_filter import PIIFilterMiddleware
+from src.api.middleware.rate_limit import RateLimitMiddleware
 from src.api.middleware.request_logger import RequestLoggerMiddleware
 from src.api.routes.admin import router as admin_router
 from src.api.routes.agent import router as agent_router
@@ -21,8 +22,24 @@ app = FastAPI(
     version="0.1.0",
 )
 
-app.add_middleware(RequestLoggerMiddleware)  # type: ignore[arg-type,unused-ignore]  # Starlette typing issue
+# Create Redis client for rate limiting (only when enabled)
+_rate_limit_redis = None
+if settings.rate_limit_enabled:
+    from redis.asyncio import Redis
+
+    _rate_limit_redis = Redis.from_url(settings.redis_url)
+
+# Middleware registration order: last added = outermost = runs first.
+# Execution order: RequestLogger -> RateLimit -> PIIFilter -> routes
 app.add_middleware(PIIFilterMiddleware, enabled=settings.pii_detection_enabled)  # type: ignore[arg-type,unused-ignore]
+app.add_middleware(
+    RateLimitMiddleware,  # type: ignore[arg-type,unused-ignore]  # Starlette typing issue
+    redis_client=_rate_limit_redis,
+    enabled=settings.rate_limit_enabled,
+    requests_per_minute=settings.rate_limit_requests_per_minute,
+    burst_size=settings.rate_limit_burst_size,
+)
+app.add_middleware(RequestLoggerMiddleware)  # type: ignore[arg-type,unused-ignore]  # Starlette typing issue
 
 app.include_router(chat_router)
 app.include_router(rag_router)
