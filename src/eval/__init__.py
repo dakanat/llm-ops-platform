@@ -18,3 +18,7 @@ class DatasetError(EvalError):
 
 class RegressionError(EvalError):
     """回帰テストに関するエラー。"""
+
+
+class SyntheticDataError(EvalError):
+    """合成データ生成に関するエラー。"""
