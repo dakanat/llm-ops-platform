@@ -137,6 +137,12 @@ class TestPhoneDetection:
         result = detector.detect("部屋番号は1234です")
         assert not any(m.pii_type == PIIType.PHONE for m in result.matches)
 
+    def test_phone_does_not_match_uuid_suffix(self) -> None:
+        """UUID末尾の数字列を電話番号と誤検出しないこと。"""
+        detector = PIIDetector()
+        result = detector.detect("id: b11a415b-2e7a-4748-be90-347d40456732")
+        assert result.has_pii is False
+
 
 # --- My Number Detection ---
 
