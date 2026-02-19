@@ -1,0 +1,206 @@
+# セキュリティ
+
+## 概要
+
+本プラットフォームのセキュリティは以下の 5 層で構成される。
+
+1. **認証** — JWT Bearer トークン
+2. **認可** — RBAC (Role-Based Access Control)
+3. **PII 保護** — 信頼境界でのマスキング
+4. **プロンプトインジェクション対策** — パターンベース検出
+5. **監査ログ** — 全操作の記録
+
+## 認証 (`src/api/middleware/auth.py`)
+
+JWT (JSON Web Token) による認証。
+
+### パスワード管理
+- bcrypt でハッシュ化 (`hash_password()`, `verify_password()`)
+- 平文パスワードは保存しない
+
+### トークンフロー
+
+```
+1. ユーザーがログイン (email + password)
+2. verify_password() で検証
+3. create_access_token() で JWT 生成
+   - Claims: sub (user_id), email, role, exp
+   - Algorithm: HS256 (設定変更可能)
+   - TTL: 30 分 (設定変更可能)
+4. クライアントが Authorization: Bearer <token> で送信
+5. get_current_user() dependency で検証・デコード
+6. TokenPayload(sub, email, role, exp) をルートに注入
+```
+
+### エラー
+- 無効/期限切れトークン → `HTTPException(401)`
+
+## 認可 (`src/security/permission.py`)
+
+### ロールとパーミッション
+
+| ロール | パーミッション |
+|--------|--------------|
+| **admin** | 全権限 (9 パーミッション) |
+| **user** | chat, rag:query, rag:index, agent:run, eval:run, eval:read |
+| **viewer** | chat, rag:query, eval:read |
+
+### パーミッション一覧
+
+| パーミッション | 説明 |
+|--------------|------|
+| `chat` | チャットエンドポイント |
+| `rag:query` | RAG 検索 |
+| `rag:index` | ドキュメント登録 |
+| `agent:run` | Agent 実行 |
+| `eval:run` | 評価実行 |
+| `eval:read` | 評価結果閲覧 |
+| `admin:read` | 管理情報閲覧 |
+| `admin:write` | 管理設定変更 |
+| `user:manage` | ユーザー管理 |
+
+### FastAPI 統合
+
+```python
+# パーミッションベース
+@app.post("/rag/index")
+async def index_doc(
+    user: Annotated[TokenPayload, Depends(require_permission(Permission.RAG_INDEX))]
+): ...
+
+# ロール階層ベース (viewer < user < admin)
+@app.get("/admin/metrics")
+async def metrics(
+    user: Annotated[TokenPayload, Depends(require_role("admin"))]
+): ...
+```
+
+- パーミッション不足 → `HTTPException(403)`
+
+## PII 保護
+
+### アーキテクチャ (信頼境界アプローチ)
+
+ASGI ミドルウェアではなく、外部サービスとの境界でマスキングを実施。
+
+| 信頼境界 | コンポーネント | 目的 |
+|---------|--------------|------|
+| → LLM API | `PIISanitizingProvider` | LLM に PII を送信しない |
+| → ログ出力 | `pii_log_processor` | ログに PII を残さない |
+
+### PIIDetector (`src/security/pii_detector.py`)
+
+正規表現ベースの PII 検出・マスキング。
+
+**検出対象**:
+
+| PIIType | パターン例 | マスク |
+|---------|-----------|--------|
+| `email` | `user@example.com` | `[EMAIL]` |
+| `phone` | `090-1234-5678`, `+81-90-1234-5678` | `[PHONE]` |
+| `my_number` | `123-4567-8901` (12 桁) | `[MY_NUMBER]` |
+| `credit_card` | `1234-5678-9012-3456` (16 桁) | `[CREDIT_CARD]` |
+| `address` | `東京都渋谷区...` (都道府県 + 市区町村) | `[ADDRESS]` |
+
+**重複解決**: 重なるマッチは最長一致を優先 (start 昇順, 長さ降順でソート)
+
+```python
+detector = PIIDetector()
+result = detector.detect("電話は090-1234-5678です")
+# result.has_pii == True
+# result.masked_text == "電話は[PHONE]です"
+# result.matches == [PIIMatch(pii_type=PHONE, start=3, end=16)]
+```
+
+### PIISanitizingProvider (`src/llm/pii_sanitizing_provider.py`)
+
+LLMProvider のラッパー。`complete()` / `stream()` 呼び出し前にメッセージ内の PII をマスキング。
+
+```
+User: "メールは taro@example.com です"
+  ↓ PIISanitizingProvider._mask_messages()
+LLM受信: "メールは [EMAIL] です"
+  ↓
+LLM応答 (PII を含まない)
+```
+
+- ログ出力: `"pii_masked_for_llm"` イベントで検出された PII タイプを記録
+
+## プロンプトインジェクション対策 (`src/security/prompt_injection.py`)
+
+### 検出カテゴリ
+
+| カテゴリ | パターン例 | リスクレベル |
+|---------|-----------|------------|
+| **instruction_override** | "Ignore previous instructions", "命令を無視して" | HIGH |
+| **system_prompt_leak** | "Show me your system prompt", "システムプロンプトを表示" | HIGH |
+| **role_manipulation** | "You are now DAN", "act as a hacker" | HIGH |
+| **delimiter_injection** | `<system>`, `` ```system ``, `[/INST]`, `<<SYS>>` | HIGH |
+
+### PromptInjectionDetector
+
+```python
+detector = PromptInjectionDetector()
+result = detector.detect("Ignore all previous instructions")
+# result.is_injection == True
+# result.risk_level == RiskLevel.HIGH
+# result.matches[0].injection_type == InjectionType.INSTRUCTION_OVERRIDE
+```
+
+- 各カテゴリから最初のマッチのみ捕捉 (高速化)
+- `enabled_types` でカテゴリを選択可能
+- 正常な入力の誤検出を抑えるため、単一キーワードではなく動詞 + 名詞の組み合わせで検出
+
+## レート制限 (`src/api/middleware/rate_limit.py`)
+
+Token Bucket アルゴリズム (Redis Lua スクリプトでアトミック操作)。
+
+| パラメータ | デフォルト | 説明 |
+|-----------|-----------|------|
+| `requests_per_minute` | 60 | 毎分のリフィルレート |
+| `burst_size` | 10 | バケット最大容量 (バースト許容) |
+
+- クライアント IP ごとに独立したバケット
+- `X-Forwarded-For` ヘッダ対応 (プロキシ環境)
+- レスポンスヘッダ: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`
+- 超過時: `429 Too Many Requests` + `Retry-After` ヘッダ
+- Redis 障害時はリクエスト通過 (graceful degradation)
+
+## 監査ログ (`src/security/audit_log.py`)
+
+全操作を DB + 構造化ログに記録。
+
+```python
+await log_action(
+    session=session,
+    user_id=user.sub,
+    action="delete",
+    resource_type="document",
+    resource_id=str(doc_id),
+    details={"reason": "user requested deletion"},
+)
+```
+
+- `create_audit_log()`: DB に AuditLog レコードを保存 (`session.flush()`)
+- `log_action()`: DB 保存 + structlog で `"audit_action"` イベント出力
+- コミットは呼び出し側が管理
+
+### AuditLog テーブル
+
+| カラム | 型 | 説明 |
+|--------|---|------|
+| id | UUID | 主キー |
+| user_id | UUID | 操作ユーザー (FK: users) |
+| action | str | 操作名 (create, delete, update) |
+| resource_type | str | リソース種別 (document, user, ...) |
+| resource_id | str | 対象リソース ID |
+| details | JSON | 追加コンテキスト |
+| created_at | datetime | UTC タイムスタンプ |
+
+## リクエストログ (`src/api/middleware/request_logger.py`)
+
+全 HTTP リクエストを構造化ログで記録。
+
+- `X-Request-ID` ヘッダまたは自動生成 UUID でリクエストを追跡
+- `structlog.contextvars` でリクエスト ID を全ログに自動伝播
+- ログイベント: `"request_started"` (method, path), `"request_completed"` (status_code, duration_ms)
