@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}Eval - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="flex flex-col gap-6">
+  <div class="flex justify-between items-center">
+    <h1 class="text-2xl font-bold">Eval Dashboard</h1>
+    <a href="/web/eval/datasets" class="btn btn-outline btn-sm">Manage Datasets</a>
+  </div>
+
+  <!-- Run evaluation form -->
+  <div class="card bg-base-100 shadow">
+    <div class="card-body">
+      <h2 class="card-title">Run Evaluation</h2>
+      <form
+        hx-post="/web/eval/run"
+        hx-target="#eval-result"
+        hx-swap="innerHTML"
+        hx-indicator="#loading-indicator"
+        class="space-y-4"
+      >
+        <div class="form-control">
+          <label class="label" for="dataset_name">
+            <span class="label-text">Dataset Name</span>
+          </label>
+          <input type="text" id="dataset_name" name="dataset_name" class="input input-bordered" required />
+        </div>
+        <div class="form-control">
+          <label class="label" for="examples">
+            <span class="label-text">Examples (JSON array)</span>
+          </label>
+          <textarea
+            id="examples"
+            name="examples"
+            rows="6"
+            class="textarea textarea-bordered font-mono text-sm"
+            placeholder='[{"query":"...","context":"...","answer":"..."}]'
+            required
+          ></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">Run Evaluation</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Results area -->
+  <div id="eval-result"></div>
+</div>
+{% endblock %}

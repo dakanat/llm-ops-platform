@@ -1,6 +1,10 @@
 """FastAPI application entry point."""
 
+from pathlib import Path
+
 from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 from src.api.middleware.rate_limit import RateLimitMiddleware
 from src.api.middleware.request_logger import RequestLoggerMiddleware
@@ -11,6 +15,27 @@ from src.api.routes.eval import router as eval_router
 from src.api.routes.rag import router as rag_router
 from src.config import Settings
 from src.monitoring.logger import setup_logging
+from src.web.routes.auth import router as web_auth_router
+
+
+def _register_web_exception_handlers(application: FastAPI) -> None:
+    """Register exception handlers for web authentication redirects."""
+    from starlette.requests import Request as StarletteRequest
+    from starlette.responses import JSONResponse, RedirectResponse
+
+    from src.web.dependencies import WebAuthRedirect
+
+    @application.exception_handler(WebAuthRedirect)
+    async def web_auth_redirect_handler(
+        request: StarletteRequest, exc: WebAuthRedirect
+    ) -> JSONResponse | RedirectResponse:
+        if exc.is_htmx:
+            return JSONResponse(
+                content="",
+                status_code=200,
+                headers={"HX-Redirect": "/web/login"},
+            )
+        return RedirectResponse(url="/web/login", status_code=303)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -54,6 +79,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     application.add_middleware(RequestLoggerMiddleware)  # type: ignore[arg-type,unused-ignore]  # Starlette typing issue
 
+    # JSON API routers
     application.include_router(chat_router)
     application.include_router(rag_router)
     application.include_router(agent_router)
@@ -64,10 +90,49 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(eval_datasets_router)
     application.include_router(admin_router)
 
+    # Web exception handlers
+    _register_web_exception_handlers(application)
+
+    # Web frontend routers
+    application.include_router(web_auth_router)
+
+    from src.web.routes.chat import router as web_chat_router
+
+    application.include_router(web_chat_router)
+
+    from src.web.routes.rag import router as web_rag_router
+
+    application.include_router(web_rag_router)
+
+    from src.web.routes.agent import router as web_agent_router
+
+    application.include_router(web_agent_router)
+
+    from src.web.routes.eval import router as web_eval_router
+
+    application.include_router(web_eval_router)
+
+    from src.web.routes.eval_datasets import router as web_eval_datasets_router
+
+    application.include_router(web_eval_datasets_router)
+
+    from src.web.routes.admin import router as web_admin_router
+
+    application.include_router(web_admin_router)
+
+    # Static files
+    static_dir = Path(__file__).parent / "web" / "static"
+    application.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
     @application.get("/health")
     async def health() -> dict[str, str]:
         """Health check endpoint."""
         return {"status": "ok"}
+
+    @application.get("/")
+    async def root_redirect() -> RedirectResponse:
+        """Redirect root to web chat page."""
+        return RedirectResponse(url="/web/chat", status_code=307)
 
     return application
 

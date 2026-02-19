@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}RAG - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="flex flex-col h-[calc(100vh-6rem)]">
+  <h1 class="text-2xl font-bold mb-4">RAG Query</h1>
+
+  <!-- Query form -->
+  <form
+    hx-post="/web/rag/query"
+    hx-target="#rag-result"
+    hx-swap="innerHTML"
+    hx-indicator="#loading-indicator"
+    class="flex gap-2 mb-4"
+  >
+    <input
+      type="text"
+      name="query"
+      placeholder="Ask a question about your documents..."
+      class="input input-bordered flex-1"
+      autocomplete="off"
+      required
+    />
+    <button type="submit" class="btn btn-primary">Query</button>
+  </form>
+
+  <!-- Result area -->
+  <div id="rag-result" class="flex-1 overflow-y-auto">
+    <div class="text-center text-base-content/50 py-8">
+      Enter a query to search your documents and get an AI-generated answer.
+    </div>
+  </div>
+</div>
+{% endblock %}

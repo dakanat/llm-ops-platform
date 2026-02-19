@@ -1,0 +1,58 @@
+<div class="space-y-4">
+  <div class="card bg-base-100 shadow">
+    <div class="card-body">
+      <h2 class="card-title">Results: {{ result.dataset_name }}</h2>
+
+      <!-- Summary stats -->
+      <div class="stats shadow">
+        {% if result.faithfulness_summary %}
+        <div class="stat">
+          <div class="stat-title">Faithfulness</div>
+          <div class="stat-value text-lg">{{ "%.2f"|format(result.faithfulness_summary.mean) }}</div>
+          <div class="stat-desc">{{ result.faithfulness_summary.count }} examples</div>
+        </div>
+        {% endif %}
+        {% if result.relevance_summary %}
+        <div class="stat">
+          <div class="stat-title">Relevance</div>
+          <div class="stat-value text-lg">{{ "%.2f"|format(result.relevance_summary.mean) }}</div>
+          <div class="stat-desc">{{ result.relevance_summary.count }} examples</div>
+        </div>
+        {% endif %}
+        {% if result.latency_summary %}
+        <div class="stat">
+          <div class="stat-title">Latency</div>
+          <div class="stat-value text-lg">{{ "%.2f"|format(result.latency_summary.mean) }}s</div>
+          <div class="stat-desc">{{ result.latency_summary.count }} examples</div>
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- Detail table -->
+      <div class="overflow-x-auto mt-4">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>Query</th>
+              <th>Faithfulness</th>
+              <th>Relevance</th>
+              <th>Latency</th>
+              <th>Error</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in result.results %}
+            <tr>
+              <td class="max-w-xs truncate">{{ r.example.query }}</td>
+              <td>{{ "%.2f"|format(r.faithfulness_score) if r.faithfulness_score is not none else "-" }}</td>
+              <td>{{ "%.2f"|format(r.relevance_score) if r.relevance_score is not none else "-" }}</td>
+              <td>{{ "%.2f"|format(r.latency_seconds) if r.latency_seconds is not none else "-" }}s</td>
+              <td>{% if r.error %}<span class="badge badge-error">{{ r.error }}</span>{% else %}-{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>

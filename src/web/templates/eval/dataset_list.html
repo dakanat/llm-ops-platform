@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}Datasets - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="flex flex-col gap-4">
+  <div class="flex justify-between items-center">
+    <h1 class="text-2xl font-bold">Eval Datasets</h1>
+    <a href="/web/eval/datasets/create" class="btn btn-primary btn-sm">Create Dataset</a>
+  </div>
+
+  {% if datasets %}
+  <div class="overflow-x-auto">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+          <th>Examples</th>
+          <th>Created</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in datasets %}
+        <tr>
+          <td><a href="/web/eval/datasets/{{ item.dataset.id }}" class="link link-primary">{{ item.dataset.name }}</a></td>
+          <td class="max-w-xs truncate">{{ item.dataset.description or "-" }}</td>
+          <td>{{ item.example_count }}</td>
+          <td>{{ item.dataset.created_at.strftime("%Y-%m-%d") }}</td>
+          <td>
+            <a href="/web/eval/datasets/{{ item.dataset.id }}" class="btn btn-ghost btn-xs">View</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="text-center text-base-content/50 py-8">
+    No datasets yet. Create one to get started.
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

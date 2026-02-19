@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}Create Dataset - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="flex flex-col gap-4">
+  <div class="flex justify-between items-center">
+    <h1 class="text-2xl font-bold">Create Dataset</h1>
+    <a href="/web/eval/datasets" class="btn btn-outline btn-sm">Back to List</a>
+  </div>
+
+  <div class="card bg-base-100 shadow">
+    <div class="card-body">
+      <form action="/api/eval/datasets" method="post" class="space-y-4">
+        <div class="form-control">
+          <label class="label" for="name">
+            <span class="label-text">Name</span>
+          </label>
+          <input type="text" id="name" name="name" class="input input-bordered" required />
+        </div>
+        <div class="form-control">
+          <label class="label" for="description">
+            <span class="label-text">Description</span>
+          </label>
+          <textarea id="description" name="description" rows="3" class="textarea textarea-bordered"></textarea>
+        </div>
+        <div class="form-control">
+          <label class="label" for="examples">
+            <span class="label-text">Examples (JSON array)</span>
+          </label>
+          <textarea
+            id="examples"
+            name="examples"
+            rows="8"
+            class="textarea textarea-bordered font-mono text-sm"
+            placeholder='[{"query":"...","context":"...","answer":"...","expected_answer":"..."}]'
+            required
+          ></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">Create Dataset</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

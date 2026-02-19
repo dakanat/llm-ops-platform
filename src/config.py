@@ -51,6 +51,11 @@ class Settings(BaseSettings):
     rate_limit_requests_per_minute: int = 60
     rate_limit_burst_size: int = 10
 
+    # Web Frontend
+    csrf_secret_key: str = "change-me-csrf-secret"
+    session_cookie_name: str = "access_token"
+    session_cookie_secure: bool = False  # Set True in production (HTTPS)
+
     # Monitoring
     log_level: str = "INFO"
     cost_alert_threshold_daily_usd: int = 10

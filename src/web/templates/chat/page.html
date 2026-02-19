@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}Chat - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="flex flex-col h-[calc(100vh-6rem)]">
+  <h1 class="text-2xl font-bold mb-4">Chat</h1>
+
+  <!-- Message area -->
+  <div id="chat-messages" class="flex-1 overflow-y-auto space-y-2 mb-4 p-4 bg-base-100 rounded-box shadow">
+    <div class="text-center text-base-content/50 py-8">
+      Start a conversation by typing a message below.
+    </div>
+  </div>
+
+  <!-- Input form (non-streaming) -->
+  <form
+    hx-post="/web/chat/send"
+    hx-target="#chat-messages"
+    hx-swap="beforeend"
+    hx-indicator="#loading-indicator"
+    hx-on::after-request="this.reset()"
+    class="flex gap-2"
+  >
+    <input
+      type="text"
+      name="message"
+      placeholder="Type your message..."
+      class="input input-bordered flex-1"
+      autocomplete="off"
+      required
+    />
+    <button type="submit" class="btn btn-primary">
+      Send
+    </button>
+  </form>
+</div>
+{% endblock %}

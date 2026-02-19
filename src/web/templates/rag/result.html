@@ -1,0 +1,21 @@
+<div class="space-y-4">
+  <!-- Answer -->
+  <div class="card bg-base-100 shadow">
+    <div class="card-body">
+      <h2 class="card-title text-lg">Answer</h2>
+      <p class="whitespace-pre-wrap">{{ answer }}</p>
+    </div>
+  </div>
+
+  <!-- Sources -->
+  {% if sources %}
+  <div>
+    <h3 class="text-lg font-semibold mb-2">Sources ({{ sources|length }})</h3>
+    <div class="grid gap-2">
+      {% for source in sources %}
+      {% include "rag/source_card.html" %}
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+</div>

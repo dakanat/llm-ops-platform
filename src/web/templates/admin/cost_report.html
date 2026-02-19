@@ -1,0 +1,40 @@
+<div class="space-y-4">
+  {% if alert_triggered %}
+  <div class="alert alert-warning">
+    <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
+    <span>Daily cost alert threshold exceeded!</span>
+  </div>
+  {% endif %}
+
+  <div class="stats shadow w-full">
+    <div class="stat">
+      <div class="stat-title">Total Cost Today</div>
+      <div class="stat-value">${{ "%.4f"|format(total_cost) }}</div>
+    </div>
+  </div>
+
+  {% if model_costs %}
+  <div class="overflow-x-auto">
+    <table class="table table-sm">
+      <thead>
+        <tr>
+          <th>Model</th>
+          <th>Cost</th>
+          <th>Requests</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for model_name, summary in model_costs.items() %}
+        <tr>
+          <td>{{ model_name }}</td>
+          <td>${{ "%.4f"|format(summary.cost) }}</td>
+          <td>{{ summary.requests }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-base-content/50">No cost data available yet.</p>
+  {% endif %}
+</div>

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}{{ dataset.name }} - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="flex flex-col gap-4">
+  <div class="flex justify-between items-center">
+    <div>
+      <h1 class="text-2xl font-bold">{{ dataset.name }}</h1>
+      {% if dataset.description %}
+      <p class="text-base-content/70 mt-1">{{ dataset.description }}</p>
+      {% endif %}
+    </div>
+    <a href="/web/eval/datasets" class="btn btn-outline btn-sm">Back to List</a>
+  </div>
+
+  <div class="overflow-x-auto">
+    <table class="table table-sm">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Query</th>
+          <th>Context</th>
+          <th>Answer</th>
+          <th>Expected</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ex in examples %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td class="max-w-xs truncate">{{ ex.query }}</td>
+          <td class="max-w-xs truncate">{{ ex.context }}</td>
+          <td class="max-w-xs truncate">{{ ex.answer }}</td>
+          <td class="max-w-xs truncate">{{ ex.expected_answer or "-" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
