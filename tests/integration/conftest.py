@@ -41,26 +41,6 @@ TEST_DATABASE_URL = os.environ.get(
 _RAW_URL = TEST_DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
 
 
-def _create_all_with_timestamptz(sync_conn: object) -> None:
-    """Create tables with TIMESTAMPTZ columns for asyncpg compatibility.
-
-    The SQLModel models use ``datetime.now(UTC)`` (timezone-aware), but
-    ``sa.DateTime()`` maps to ``TIMESTAMP WITHOUT TIME ZONE`` by default.
-    asyncpg refuses to insert tz-aware datetimes into such columns. We
-    temporarily patch DateTime columns to ``timezone=True`` during table
-    creation so PostgreSQL uses ``TIMESTAMPTZ`` instead.
-    """
-    import sqlalchemy as sa
-
-    # Patch all DateTime columns to use timezone=True
-    for table in SQLModel.metadata.tables.values():
-        for column in table.columns:
-            if isinstance(column.type, sa.DateTime):
-                column.type = sa.DateTime(timezone=True)
-
-    SQLModel.metadata.create_all(sync_conn)  # type: ignore[arg-type]
-
-
 # ---------------------------------------------------------------------------
 # Database engine (module-scoped, shared event loop)
 # ---------------------------------------------------------------------------
@@ -96,12 +76,11 @@ async def _engine() -> AsyncGenerator[AsyncEngine, None]:
     )
 
     # Enable pgvector + create tables
-    # Use TIMESTAMPTZ columns so asyncpg can handle tz-aware datetimes
     async with engine.begin() as conn:
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
 
     async with engine.begin() as conn:
-        await conn.run_sync(_create_all_with_timestamptz)
+        await conn.run_sync(SQLModel.metadata.create_all)
 
     yield engine
 

@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     embedding_model: str = "cl-nagoya/ruri-v3-310m"  # used when provider=local
 
     # Database
-    database_url: str = "postgresql+asyncpg://postgres:postgres@db:5432/llm_platform"
+    database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/llm_platform"
 
     # Redis
     redis_url: str = "redis://redis:6379/0"

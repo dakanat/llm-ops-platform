@@ -5,8 +5,12 @@ from datetime import UTC, datetime
 from typing import Any
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import JSON, Column, Text
+from sqlalchemy import JSON, Column, DateTime, Text
 from sqlmodel import Field, SQLModel
+
+# DateTime(timezone=True) is an instance, but sa_type is typed as type[Any]
+# in SQLModel's stubs. Runtime behavior is correct; suppress the false positive.
+_DATETIME_TZ = DateTime(timezone=True)
 
 
 class User(SQLModel, table=True):
@@ -20,8 +24,14 @@ class User(SQLModel, table=True):
     hashed_password: str
     role: str = Field(default="user")
     is_active: bool = Field(default=True)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_type=_DATETIME_TZ,  # type: ignore[call-overload]
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_type=_DATETIME_TZ,  # type: ignore[call-overload]
+    )
 
     def model_post_init(self, __context: object) -> None:
         """Validate role after initialization."""
@@ -44,8 +54,14 @@ class Document(SQLModel, table=True):
         sa_column=Column("metadata", JSON, nullable=False, default={}),
     )
     user_id: uuid.UUID = Field(foreign_key="users.id")
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_type=_DATETIME_TZ,  # type: ignore[call-overload]
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_type=_DATETIME_TZ,  # type: ignore[call-overload]
+    )
 
 
 class Chunk(SQLModel, table=True):
@@ -61,7 +77,10 @@ class Chunk(SQLModel, table=True):
         default=None,
         sa_column=Column(Vector(1024)),
     )
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_type=_DATETIME_TZ,  # type: ignore[call-overload]
+    )
 
 
 class Conversation(SQLModel, table=True):
@@ -72,8 +91,14 @@ class Conversation(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     user_id: uuid.UUID = Field(foreign_key="users.id")
     title: str | None = Field(default=None)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_type=_DATETIME_TZ,  # type: ignore[call-overload]
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_type=_DATETIME_TZ,  # type: ignore[call-overload]
+    )
 
 
 class Message(SQLModel, table=True):
@@ -86,7 +111,10 @@ class Message(SQLModel, table=True):
     role: str
     content: str = Field(sa_column=Column(Text, nullable=False))
     token_count: int | None = Field(default=None)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_type=_DATETIME_TZ,  # type: ignore[call-overload]
+    )
 
     def model_post_init(self, __context: object) -> None:
         """Validate role after initialization."""
@@ -110,7 +138,10 @@ class AuditLog(SQLModel, table=True):
         default_factory=dict,
         sa_column=Column(JSON, nullable=False, default={}),
     )
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_type=_DATETIME_TZ,  # type: ignore[call-overload]
+    )
 
 
 class EvalDatasetRecord(SQLModel, table=True):
@@ -122,8 +153,14 @@ class EvalDatasetRecord(SQLModel, table=True):
     name: str = Field(unique=True, index=True)
     description: str | None = Field(default=None, sa_column=Column(Text))
     created_by: uuid.UUID = Field(foreign_key="users.id")
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_type=_DATETIME_TZ,  # type: ignore[call-overload]
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_type=_DATETIME_TZ,  # type: ignore[call-overload]
+    )
 
 
 class EvalExampleRecord(SQLModel, table=True):
@@ -137,4 +174,7 @@ class EvalExampleRecord(SQLModel, table=True):
     context: str = Field(sa_column=Column(Text, nullable=False))
     answer: str = Field(sa_column=Column(Text, nullable=False))
     expected_answer: str | None = Field(default=None, sa_column=Column(Text))
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_type=_DATETIME_TZ,  # type: ignore[call-overload]
+    )

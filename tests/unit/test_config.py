@@ -18,7 +18,8 @@ class TestSettings:
         assert settings.embedding_base_url == "http://embedding:8001/v1"
         assert settings.embedding_model == "cl-nagoya/ruri-v3-310m"
         assert (
-            settings.database_url == "postgresql+asyncpg://postgres:postgres@db:5432/llm_platform"
+            settings.database_url
+            == "postgresql+asyncpg://postgres:postgres@localhost:5432/llm_platform"
         )
         assert settings.redis_url == "redis://redis:6379/0"
         assert settings.pii_detection_enabled is True
