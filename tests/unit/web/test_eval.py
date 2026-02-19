@@ -14,7 +14,7 @@ from src.eval.datasets import EvalDataset, EvalExample
 from src.eval.runner import EvalRunResult, ExampleResult, MetricSummary
 from src.main import create_app
 
-from tests.unit.web.conftest import auth_cookies
+from tests.unit.web.conftest import AuthCookies
 
 
 @pytest.fixture(scope="module")
@@ -59,7 +59,7 @@ class TestEvalPage:
     async def test_authenticated_returns_eval_page(
         self, client: AsyncClient, admin_token: str
     ) -> None:
-        with auth_cookies(client, admin_token):
+        with AuthCookies(client, admin_token):
             resp = await client.get("/web/eval")
         assert resp.status_code == 200
         assert "Eval" in resp.text
@@ -113,7 +113,7 @@ class TestEvalRun:
         eval_module._run_eval = _mock_run
 
         try:
-            with auth_cookies(client, admin_token):
+            with AuthCookies(client, admin_token):
                 resp = await client.post(
                     "/web/eval/run",
                     data={

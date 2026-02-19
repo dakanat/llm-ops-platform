@@ -13,7 +13,7 @@ from httpx import ASGITransport, AsyncClient
 from src.config import Settings
 from src.main import create_app
 
-from tests.unit.web.conftest import auth_cookies
+from tests.unit.web.conftest import AuthCookies
 
 
 @pytest.fixture(scope="module")
@@ -71,7 +71,7 @@ class TestEvalDatasetsPage:
         ds_module._get_session = _fake_session
 
         try:
-            with auth_cookies(client, admin_token):
+            with AuthCookies(client, admin_token):
                 resp = await client.get("/web/eval/datasets")
             assert resp.status_code == 200
             assert "text/html" in resp.headers["content-type"]
@@ -84,7 +84,7 @@ class TestEvalDatasetCreate:
     """Tests for GET /web/eval/datasets/create."""
 
     async def test_create_form_renders(self, client: AsyncClient, admin_token: str) -> None:
-        with auth_cookies(client, admin_token):
+        with AuthCookies(client, admin_token):
             resp = await client.get("/web/eval/datasets/create")
         assert resp.status_code == 200
         assert "form" in resp.text.lower()

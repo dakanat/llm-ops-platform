@@ -14,7 +14,7 @@ from src.agent.state import AgentStep
 from src.config import Settings
 from src.main import create_app
 
-from tests.unit.web.conftest import auth_cookies
+from tests.unit.web.conftest import AuthCookies
 
 
 @pytest.fixture(scope="module")
@@ -59,7 +59,7 @@ class TestAgentPage:
     async def test_authenticated_returns_agent_page(
         self, client: AsyncClient, admin_token: str
     ) -> None:
-        with auth_cookies(client, admin_token):
+        with AuthCookies(client, admin_token):
             resp = await client.get("/web/agent")
         assert resp.status_code == 200
         assert "Agent" in resp.text
@@ -103,7 +103,7 @@ class TestAgentRun:
         agent_module._create_runtime = _mock_create
 
         try:
-            with auth_cookies(client, admin_token):
+            with AuthCookies(client, admin_token):
                 resp = await client.post(
                     "/web/agent/run",
                     data={"query": "What is 6 * 7?"},
@@ -116,7 +116,7 @@ class TestAgentRun:
             test_app.dependency_overrides.clear()
 
     async def test_empty_query_returns_error(self, client: AsyncClient, admin_token: str) -> None:
-        with auth_cookies(client, admin_token):
+        with AuthCookies(client, admin_token):
             resp = await client.post(
                 "/web/agent/run",
                 data={"query": ""},

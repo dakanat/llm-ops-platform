@@ -95,7 +95,7 @@ def user_token() -> str:
     )
 
 
-class auth_cookies:
+class AuthCookies:
     """Context manager: set auth cookie on client, then clear on exit."""
 
     def __init__(self, client: AsyncClient, token: str) -> None:

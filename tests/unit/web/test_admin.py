@@ -14,7 +14,7 @@ from src.api.middleware.auth import create_access_token
 from src.config import Settings
 from src.main import create_app
 
-from tests.unit.web.conftest import auth_cookies
+from tests.unit.web.conftest import AuthCookies
 
 
 @pytest.fixture(scope="module")
@@ -63,13 +63,13 @@ class TestAdminPage:
         assert resp.status_code == 303
 
     async def test_admin_can_access(self, client: AsyncClient, admin_token: str) -> None:
-        with auth_cookies(client, admin_token):
+        with AuthCookies(client, admin_token):
             resp = await client.get("/web/admin")
         assert resp.status_code == 200
         assert "Admin" in resp.text
 
     async def test_viewer_gets_forbidden(self, client: AsyncClient, viewer_token: str) -> None:
-        with auth_cookies(client, viewer_token):
+        with AuthCookies(client, viewer_token):
             resp = await client.get("/web/admin")
         assert (
             resp.status_code == 403 or "Forbidden" in resp.text or "permission" in resp.text.lower()
@@ -95,7 +95,7 @@ class TestAdminCosts:
 
         test_app.dependency_overrides[get_cost_tracker] = lambda: mock_tracker
 
-        with auth_cookies(client, admin_token):
+        with AuthCookies(client, admin_token):
             resp = await client.get("/web/admin/costs")
         assert resp.status_code == 200
         assert "1.5" in resp.text or "$1.50" in resp.text

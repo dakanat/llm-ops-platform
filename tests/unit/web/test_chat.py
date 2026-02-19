@@ -13,7 +13,7 @@ from src.config import Settings
 from src.llm.providers.base import LLMChunk, LLMResponse, TokenUsage
 from src.main import create_app
 
-from tests.unit.web.conftest import auth_cookies
+from tests.unit.web.conftest import AuthCookies
 
 
 @pytest.fixture(scope="module")
@@ -59,7 +59,7 @@ class TestChatPage:
     async def test_authenticated_returns_chat_page(
         self, client: AsyncClient, admin_token: str
     ) -> None:
-        with auth_cookies(client, admin_token):
+        with AuthCookies(client, admin_token):
             resp = await client.get("/web/chat")
         assert resp.status_code == 200
         assert "text/html" in resp.headers["content-type"]
@@ -84,7 +84,7 @@ class TestChatSend:
         test_app.dependency_overrides[get_llm_provider] = lambda: mock_provider
         test_app.dependency_overrides[get_llm_model] = lambda: "test-model"
 
-        with auth_cookies(client, admin_token):
+        with AuthCookies(client, admin_token):
             resp = await client.post(
                 "/web/chat/send",
                 data={"message": "Hello"},
@@ -98,7 +98,7 @@ class TestChatSend:
     async def test_send_empty_message_returns_error(
         self, client: AsyncClient, admin_token: str
     ) -> None:
-        with auth_cookies(client, admin_token):
+        with AuthCookies(client, admin_token):
             resp = await client.post(
                 "/web/chat/send",
                 data={"message": ""},
@@ -126,7 +126,7 @@ class TestChatStream:
         test_app.dependency_overrides[get_llm_provider] = lambda: mock_provider
         test_app.dependency_overrides[get_llm_model] = lambda: "test-model"
 
-        with auth_cookies(client, admin_token):
+        with AuthCookies(client, admin_token):
             resp = await client.post(
                 "/web/chat/stream",
                 data={"message": "Hello"},
