@@ -1,19 +1,23 @@
-"""Web authentication routes (login/logout)."""
+"""Web authentication routes (login/logout/register)."""
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from src.api.middleware.auth import create_access_token, verify_password
+from src.api.middleware.auth import create_access_token, hash_password, verify_password
 from src.config import Settings
 from src.db.models import User
 from src.web.csrf import generate_csrf_token
 from src.web.templates import templates
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 router = APIRouter(prefix="/web")
 
@@ -36,6 +40,18 @@ def _render_login(request: Request, settings: Settings, error: str | None = None
     response = templates.TemplateResponse(
         request,
         "auth/login.html",
+        {"csrf_token": csrf_token, "error": error},
+    )
+    response.set_cookie("csrf_token", csrf_token, httponly=False, samesite="strict")
+    return response
+
+
+def _render_register(request: Request, settings: Settings, error: str | None = None) -> Response:
+    """Render the register page with a fresh CSRF token."""
+    csrf_token = generate_csrf_token(settings.csrf_secret_key)
+    response = templates.TemplateResponse(
+        request,
+        "auth/register.html",
         {"csrf_token": csrf_token, "error": error},
     )
     response.set_cookie("csrf_token", csrf_token, httponly=False, samesite="strict")
@@ -95,4 +111,65 @@ async def logout(request: Request) -> Response:
     settings = Settings()
     response = RedirectResponse(url="/web/login", status_code=303)
     response.delete_cookie(key=settings.session_cookie_name)
+    return response
+
+
+@router.get("/register", response_class=HTMLResponse)
+async def register_page(request: Request) -> Response:
+    """Display the registration page."""
+    settings = Settings()
+    return _render_register(request, settings)
+
+
+@router.post("/register", response_class=HTMLResponse)
+async def register_submit(request: Request) -> Response:
+    """Process registration form submission."""
+    settings = Settings()
+    form = await request.form()
+    email = str(form.get("email", "")).strip().lower()
+    name = str(form.get("name", "")).strip()
+    password = str(form.get("password", ""))
+
+    # Validation
+    if not name:
+        return _render_register(request, settings, error="Name is required")
+    if not _EMAIL_RE.match(email):
+        return _render_register(request, settings, error="Invalid email format")
+    if len(password) < 8:
+        return _render_register(request, settings, error="Password must be at least 8 characters")
+
+    user = User(
+        email=email,
+        name=name,
+        hashed_password=hash_password(password),
+        role="user",
+    )
+
+    session = await _get_session()
+    try:
+        session.add(user)
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        return _render_register(
+            request, settings, error="An account with this email already exists"
+        )
+    finally:
+        await session.close()
+
+    token = create_access_token(
+        user_id=user.id,
+        email=user.email,
+        role=user.role,
+        settings=settings,
+    )
+    response = RedirectResponse(url="/web/chat", status_code=303)
+    response.set_cookie(
+        key=settings.session_cookie_name,
+        value=token,
+        httponly=True,
+        secure=settings.session_cookie_secure,
+        samesite="lax",
+        max_age=settings.jwt_access_token_expire_minutes * 60,
+    )
     return response

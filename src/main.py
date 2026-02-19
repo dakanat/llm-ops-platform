@@ -90,6 +90,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(eval_datasets_router)
     application.include_router(admin_router)
 
+    from src.api.routes.auth import router as auth_router
+
+    application.include_router(auth_router)
+
     # Web exception handlers
     _register_web_exception_handlers(application)
 
