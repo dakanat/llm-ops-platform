@@ -7,7 +7,7 @@
 RAG・Agent・評価・監視・セキュリティを統合した、エンタープライズ向けLLMプラットフォーム。
 PoCではなく本番運用を前提とし、品質・コスト・安全性のトレードオフを考慮した設計。
 
-**ローカル実行前提**: VRAM 8GB環境で動作。Embeddingはローカルvllmサーバー(別コンテナ)、LLM推論はOpenRouter API経由。
+**ローカル実行前提**: VRAM 8GB環境で動作。Embeddingはローカルvllmサーバー(別コンテナ)、LLM推論はGemini API経由（デフォルト）。
 
 ## 開発ルール
 
@@ -82,9 +82,12 @@ make seed                  # python scripts/seed_data.py
 ## 環境変数 (.env.example)
 
 ```env
-# LLM Provider: openrouter | openai | anthropic
-LLM_PROVIDER=openrouter
-LLM_MODEL=openai/gpt-oss-120b:free
+# LLM Provider: gemini | openrouter | openai | anthropic
+LLM_PROVIDER=gemini
+LLM_MODEL=gemini-2.5-flash-lite
+GEMINI_API_KEY=your-key-here
+
+# OpenRouter (alternative)
 OPENROUTER_API_KEY=your-key-here
 
 # Embedding (local vLLM server)
@@ -112,7 +115,7 @@ COST_ALERT_THRESHOLD_DAILY_USD=10
 - **TDD厳守**: 実装コードを書く前に必ずテストを書く。テストなしの実装コミットは禁止
 - **コミット粒度**: Red→Green は1コミットにまとめてよいが、テストなしの実装コミットは禁止
 - VRAM 8GB環境前提。ruri-v3-310m (~620MB VRAM) + vLLMオーバーヘッドで計約1-2GB使用
-- LLM推論はOpenRouter API経由のためネットワーク接続が必要
+- LLM推論はGemini API経由（デフォルト）のためネットワーク接続が必要
 - vLLM embeddingコンテナの初回起動時にHugging Faceからモデルをダウンロード (約600MB)
 - テスト時、LLM API呼び出しを含むテストは `@pytest.mark.llm` でマーク。CIではスキップ可能
 - プロンプトテンプレート変更時は回帰テスト (`POST /eval/run` API) を実行してからマージ
@@ -130,11 +133,11 @@ COST_ALERT_THRESHOLD_DAILY_USD=10
 
 ### Phase 5: 完成に向けて
 
-**5-1: LLMマルチプロバイダ対応**
+**5-1: LLMマルチプロバイダ対応** ✅
+- `src/llm/providers/gemini_provider.py` — Gemini OpenAI互換実装（デフォルト）
 - `src/llm/providers/openai_provider.py` — OpenAI互換実装
 - `src/llm/providers/anthropic_provider.py` — Anthropic Messages API実装
-- `src/llm/router.py` — 新プロバイダのルーティング追加
-- パターン: `openrouter.py` を参考にProtocol準拠
+- `src/llm/router.py` — gemini / openrouter / openai / anthropic ルーティング
 
 **5-2: トークンカウンター**
 - `src/llm/token_counter.py` — tiktoken使用、コスト推定

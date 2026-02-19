@@ -17,7 +17,7 @@ cd llm-ops-platform
 
 # 2. 環境変数の設定
 cp .env.example .env
-# .env を編集: OPENROUTER_API_KEY, JWT_SECRET_KEY を設定
+# .env を編集: GEMINI_API_KEY, JWT_SECRET_KEY を設定
 
 # 3. コンテナの起動
 make up    # docker compose up -d --build
@@ -95,8 +95,9 @@ uv run alembic downgrade -1
 
 | 変数 | デフォルト | 説明 |
 |------|-----------|------|
-| `LLM_PROVIDER` | `openrouter` | LLM プロバイダ (openrouter / openai / anthropic) |
-| `LLM_MODEL` | `openai/gpt-oss-120b:free` | 使用モデル名 |
+| `LLM_PROVIDER` | `gemini` | LLM プロバイダ (gemini / openrouter / openai / anthropic) |
+| `LLM_MODEL` | `gemini-2.5-flash-lite` | 使用モデル名 |
+| `GEMINI_API_KEY` | — | Gemini API キー |
 | `OPENROUTER_API_KEY` | — | OpenRouter API キー |
 | `EMBEDDING_BASE_URL` | `http://embedding:8001/v1` | Embedding サーバー URL |
 | `EMBEDDING_MODEL` | `cl-nagoya/ruri-v3-310m` | Embedding モデル名 |
@@ -184,7 +185,7 @@ make test-no-llm
 
 ## コスト管理
 
-- デフォルトモデル (`openai/gpt-oss-120b:free`) は無料
+- デフォルトモデル (`gemini-2.5-flash-lite`) は Gemini 無料枠 (15 RPM / 250K TPM / 1000 RPD)
 - セマンティックキャッシュ (Redis) で同一・類似クエリの API 呼び出しを削減
 - Embedding はローカル vLLM 実行で API 費用ゼロ
 - コスト追跡: `src/monitoring/cost_tracker.py` で日次コストを監視

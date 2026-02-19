@@ -3,7 +3,7 @@
 ## システム概要
 
 LLM Ops Platform は RAG・Agent・評価・監視・セキュリティを統合したエンタープライズ向け LLM プラットフォーム。
-ローカル VRAM 8GB 環境で動作し、Embedding はローカル vLLM サーバー、LLM 推論は OpenRouter API 経由。
+ローカル VRAM 8GB 環境で動作し、Embedding はローカル vLLM サーバー、LLM 推論は Gemini API 経由（デフォルト）。
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -14,7 +14,7 @@ LLM Ops Platform は RAG・Agent・評価・監視・セキュリティを統合
 │ Pipeline │ Runtime  │ Engine   │ Metrics  │  Guardian       │
 ├──────────┴──────────┴──────────┴──────────┴─────────────────┤
 │              LLM Router (プロバイダ切替・フォールバック)       │
-│         OpenRouter API (デフォルト) / OpenAI / Anthropic     │
+│    Gemini API (デフォルト) / OpenRouter / OpenAI / Anthropic  │
 ├─────────────────────────────────────────────────────────────┤
 │  PostgreSQL 16 + pgvector  │  Redis  │  vLLM Embedding     │
 └─────────────────────────────────────────────────────────────┘
@@ -40,7 +40,7 @@ LLM Ops Platform は RAG・Agent・評価・監視・セキュリティを統合
 | 言語 | Python 3.12 |
 | フレームワーク | FastAPI, Pydantic v2 |
 | ORM | SQLModel (SQLAlchemy + Pydantic 統合) |
-| LLM API | OpenRouter API (デフォルト: gpt-oss-120b free) — OpenAI, Anthropic に切替可能 |
+| LLM API | Gemini API (デフォルト: gemini-2.5-flash-lite 無料枠) — OpenRouter, OpenAI, Anthropic に切替可能 |
 | Embedding | cl-nagoya/ruri-v3-310m (vLLM ローカルサーバー, 1024 次元) |
 | Vector DB | pgvector (PostgreSQL 16 拡張, cosine distance) |
 | キャッシュ | Redis 7 (セマンティックキャッシュ, レート制限) |
@@ -94,7 +94,7 @@ LLMRouter (Factory)
   └── get_provider() → settings.llm_provider に応じたインスタンス生成
 ```
 
-- 現在の実装: `OpenRouterProvider` (OpenAI 互換 API)
+- 現在の実装: `GeminiProvider` (デフォルト), `OpenRouterProvider`, `OpenAIProvider`, `AnthropicProvider`
 - 新規プロバイダ追加 = Protocol 実装 + Router 登録のみ
 
 ### PII 保護アーキテクチャ (信頼境界アプローチ)
@@ -141,7 +141,7 @@ users (id, email, name, hashed_password, role, is_active)
 ## トレードオフ方針
 
 ### 品質 vs コスト
-- デフォルトは OpenRouter 無料モデル。品質要件に応じてプロバイダ/モデルを切替
+- デフォルトは Gemini 無料枠 (gemini-2.5-flash-lite)。品質要件に応じてプロバイダ/モデルを切替
 - セマンティックキャッシュで同一・類似クエリの API 呼び出しを削減
 - Embedding はローカル vLLM 実行で API 費用ゼロ
 
