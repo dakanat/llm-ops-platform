@@ -32,6 +32,7 @@ uv.lock
 # Claude Code
 .claude/
 plans/
+.mcp.json
 
 # Eval outputs
 eval-outputs/
