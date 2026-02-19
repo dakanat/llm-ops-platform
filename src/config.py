@@ -20,9 +20,11 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     anthropic_api_key: str = ""
 
-    # Embedding (local vLLM server)
-    embedding_base_url: str = "http://embedding:8001/v1"
-    embedding_model: str = "cl-nagoya/ruri-v3-310m"
+    # Embedding
+    embedding_provider: str = "gemini"  # "gemini" | "local"
+    embedding_gemini_model: str = "gemini-embedding-001"  # used when provider=gemini
+    embedding_base_url: str = "http://embedding:8001/v1"  # used when provider=local
+    embedding_model: str = "cl-nagoya/ruri-v3-310m"  # used when provider=local
 
     # Database
     database_url: str = "postgresql+asyncpg://postgres:postgres@db:5432/llm_platform"

@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from src.eval.runner import EvalRunner
     from src.eval.synthetic_data import SyntheticDataGenerator
     from src.monitoring.cost_tracker import CostTracker
+    from src.rag.gemini_embedder import GeminiEmbedder
 from src.db.session import get_session
 from src.db.vector_store import VectorStore
 from src.llm.providers.base import LLMProvider
@@ -63,15 +64,30 @@ def get_llm_model(
     return router.model
 
 
+def _create_embedder(settings: Settings) -> Embedder | GeminiEmbedder:
+    """Create an embedder based on the configured provider."""
+    if settings.embedding_provider == "gemini":
+        from src.rag.gemini_embedder import GeminiEmbedder as _GeminiEmbedder
+
+        return _GeminiEmbedder(
+            api_key=settings.gemini_api_key,
+            model=settings.embedding_gemini_model,
+        )
+    if settings.embedding_provider == "local":
+        return Embedder(
+            base_url=settings.embedding_base_url,
+            model=settings.embedding_model,
+        )
+    msg = f"Unknown embedding provider: '{settings.embedding_provider}'"
+    raise ValueError(msg)
+
+
 async def get_rag_pipeline(
     session: Annotated[AsyncSession, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> AsyncGenerator[RAGPipeline, None]:
     """Build a RAG pipeline and clean up the embedder on teardown."""
-    embedder = Embedder(
-        base_url=settings.embedding_base_url,
-        model=settings.embedding_model,
-    )
+    embedder = _create_embedder(settings)
     try:
         vector_store = VectorStore(session=session)
         preprocessor = Preprocessor()
