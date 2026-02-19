@@ -134,10 +134,10 @@ class TestLogout:
             email="admin@example.com",
             role="admin",
         )
-        resp = await client.post(
-            "/web/logout",
-            cookies={"access_token": token},
-        )
+        from tests.unit.web.conftest import auth_cookies
+
+        with auth_cookies(client, token):
+            resp = await client.post("/web/logout")
         assert resp.status_code == 303
         assert resp.headers["location"] == "/web/login"
         cookie_header = resp.headers.get("set-cookie", "")

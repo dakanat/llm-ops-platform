@@ -59,7 +59,8 @@ class TestEvalPage:
     async def test_authenticated_returns_eval_page(
         self, client: AsyncClient, admin_token: str
     ) -> None:
-        resp = await client.get("/web/eval", cookies=auth_cookies(admin_token))
+        with auth_cookies(client, admin_token):
+            resp = await client.get("/web/eval")
         assert resp.status_code == 200
         assert "Eval" in resp.text
 
@@ -112,18 +113,18 @@ class TestEvalRun:
         eval_module._run_eval = _mock_run
 
         try:
-            resp = await client.post(
-                "/web/eval/run",
-                data={
-                    "dataset_name": "test-dataset",
-                    "examples": (
-                        '[{"query":"What is AI?",'
-                        '"context":"AI is artificial intelligence.",'
-                        '"answer":"AI stands for artificial intelligence."}]'
-                    ),
-                },
-                cookies=auth_cookies(admin_token),
-            )
+            with auth_cookies(client, admin_token):
+                resp = await client.post(
+                    "/web/eval/run",
+                    data={
+                        "dataset_name": "test-dataset",
+                        "examples": (
+                            '[{"query":"What is AI?",'
+                            '"context":"AI is artificial intelligence.",'
+                            '"answer":"AI stands for artificial intelligence."}]'
+                        ),
+                    },
+                )
             assert resp.status_code == 200
             assert "test-dataset" in resp.text
             assert "0.9" in resp.text

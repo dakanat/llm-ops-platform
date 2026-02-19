@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import AsyncGenerator, Iterator
 from datetime import UTC, datetime, timedelta
-from typing import Any
 from uuid import UUID
 
 import pytest
@@ -96,6 +95,15 @@ def user_token() -> str:
     )
 
 
-def auth_cookies(token: str) -> dict[str, Any]:
-    """Build cookie dict for authenticated requests."""
-    return {"access_token": token}
+class auth_cookies:
+    """Context manager: set auth cookie on client, then clear on exit."""
+
+    def __init__(self, client: AsyncClient, token: str) -> None:
+        self._client = client
+        self._token = token
+
+    def __enter__(self) -> None:
+        self._client.cookies.set("access_token", self._token)
+
+    def __exit__(self, *args: object) -> None:
+        self._client.cookies.delete("access_token")

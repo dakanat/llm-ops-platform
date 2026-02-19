@@ -59,7 +59,8 @@ class TestAgentPage:
     async def test_authenticated_returns_agent_page(
         self, client: AsyncClient, admin_token: str
     ) -> None:
-        resp = await client.get("/web/agent", cookies=auth_cookies(admin_token))
+        with auth_cookies(client, admin_token):
+            resp = await client.get("/web/agent")
         assert resp.status_code == 200
         assert "Agent" in resp.text
 
@@ -102,11 +103,11 @@ class TestAgentRun:
         agent_module._create_runtime = _mock_create
 
         try:
-            resp = await client.post(
-                "/web/agent/run",
-                data={"query": "What is 6 * 7?"},
-                cookies=auth_cookies(admin_token),
-            )
+            with auth_cookies(client, admin_token):
+                resp = await client.post(
+                    "/web/agent/run",
+                    data={"query": "What is 6 * 7?"},
+                )
             assert resp.status_code == 200
             assert "42" in resp.text
             assert "calculator" in resp.text
@@ -115,11 +116,11 @@ class TestAgentRun:
             test_app.dependency_overrides.clear()
 
     async def test_empty_query_returns_error(self, client: AsyncClient, admin_token: str) -> None:
-        resp = await client.post(
-            "/web/agent/run",
-            data={"query": ""},
-            cookies=auth_cookies(admin_token),
-        )
+        with auth_cookies(client, admin_token):
+            resp = await client.post(
+                "/web/agent/run",
+                data={"query": ""},
+            )
         assert resp.status_code == 200
         body = resp.text
         assert "alert" in body.lower() or "error" in body.lower() or "empty" in body.lower()

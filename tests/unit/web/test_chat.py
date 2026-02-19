@@ -59,7 +59,8 @@ class TestChatPage:
     async def test_authenticated_returns_chat_page(
         self, client: AsyncClient, admin_token: str
     ) -> None:
-        resp = await client.get("/web/chat", cookies=auth_cookies(admin_token))
+        with auth_cookies(client, admin_token):
+            resp = await client.get("/web/chat")
         assert resp.status_code == 200
         assert "text/html" in resp.headers["content-type"]
         assert "Chat" in resp.text
@@ -83,11 +84,11 @@ class TestChatSend:
         test_app.dependency_overrides[get_llm_provider] = lambda: mock_provider
         test_app.dependency_overrides[get_llm_model] = lambda: "test-model"
 
-        resp = await client.post(
-            "/web/chat/send",
-            data={"message": "Hello"},
-            cookies=auth_cookies(admin_token),
-        )
+        with auth_cookies(client, admin_token):
+            resp = await client.post(
+                "/web/chat/send",
+                data={"message": "Hello"},
+            )
         assert resp.status_code == 200
         assert "text/html" in resp.headers["content-type"]
         assert "Hello from the LLM!" in resp.text
@@ -97,11 +98,11 @@ class TestChatSend:
     async def test_send_empty_message_returns_error(
         self, client: AsyncClient, admin_token: str
     ) -> None:
-        resp = await client.post(
-            "/web/chat/send",
-            data={"message": ""},
-            cookies=auth_cookies(admin_token),
-        )
+        with auth_cookies(client, admin_token):
+            resp = await client.post(
+                "/web/chat/send",
+                data={"message": ""},
+            )
         assert resp.status_code == 200
         body = resp.text
         assert "alert" in body.lower() or "error" in body.lower()
@@ -125,11 +126,11 @@ class TestChatStream:
         test_app.dependency_overrides[get_llm_provider] = lambda: mock_provider
         test_app.dependency_overrides[get_llm_model] = lambda: "test-model"
 
-        resp = await client.post(
-            "/web/chat/stream",
-            data={"message": "Hello"},
-            cookies=auth_cookies(admin_token),
-        )
+        with auth_cookies(client, admin_token):
+            resp = await client.post(
+                "/web/chat/stream",
+                data={"message": "Hello"},
+            )
         assert resp.status_code == 200
         assert "text/event-stream" in resp.headers["content-type"]
         body = resp.text

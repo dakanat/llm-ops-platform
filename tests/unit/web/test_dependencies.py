@@ -50,7 +50,8 @@ class TestGetCurrentWebUser:
         )
         app = _make_app()
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            resp = await client.get("/test", cookies={"access_token": token})
+            client.cookies.set("access_token", token)
+            resp = await client.get("/test")
             assert resp.status_code == 200
             data = resp.json()
             assert data["email"] == "test@example.com"
@@ -81,6 +82,7 @@ class TestGetCurrentWebUser:
             base_url="http://test",
             follow_redirects=False,
         ) as client:
-            resp = await client.get("/test", cookies={"access_token": "invalid-token"})
+            client.cookies.set("access_token", "invalid-token")
+            resp = await client.get("/test")
             assert resp.status_code == 303
             assert "/web/login" in resp.headers["location"]

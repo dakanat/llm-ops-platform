@@ -61,7 +61,8 @@ class TestRagPage:
     async def test_authenticated_returns_rag_page(
         self, client: AsyncClient, admin_token: str
     ) -> None:
-        resp = await client.get("/web/rag", cookies=auth_cookies(admin_token))
+        with auth_cookies(client, admin_token):
+            resp = await client.get("/web/rag")
         assert resp.status_code == 200
         assert "RAG" in resp.text
 
@@ -93,11 +94,11 @@ class TestRagQuery:
 
         test_app.dependency_overrides[get_rag_pipeline] = _mock_pipeline
 
-        resp = await client.post(
-            "/web/rag/query",
-            data={"query": "What is RAG?"},
-            cookies=auth_cookies(admin_token),
-        )
+        with auth_cookies(client, admin_token):
+            resp = await client.post(
+                "/web/rag/query",
+                data={"query": "What is RAG?"},
+            )
         assert resp.status_code == 200
         assert "This is the answer from RAG." in resp.text
         assert "Source content here" in resp.text
@@ -105,11 +106,11 @@ class TestRagQuery:
         test_app.dependency_overrides.clear()
 
     async def test_empty_query_returns_error(self, client: AsyncClient, admin_token: str) -> None:
-        resp = await client.post(
-            "/web/rag/query",
-            data={"query": ""},
-            cookies=auth_cookies(admin_token),
-        )
+        with auth_cookies(client, admin_token):
+            resp = await client.post(
+                "/web/rag/query",
+                data={"query": ""},
+            )
         assert resp.status_code == 200
         body = resp.text
         assert "alert" in body.lower() or "error" in body.lower() or "empty" in body.lower()
