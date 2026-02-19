@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+from sqlmodel import select
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from src.api.dependencies import get_eval_runner
+from src.db.models import EvalDatasetRecord, EvalExampleRecord
+from src.db.session import get_session
 from src.eval import EvalError
 from src.eval.datasets import EvalDataset, EvalExample
 from src.eval.runner import EvalRunner, EvalRunResult
@@ -49,7 +54,16 @@ class EvalRunRequest(BaseModel):
     """評価実行リクエスト。"""
 
     dataset_name: str = Field(min_length=1)
-    examples: list[EvalExampleInput] = Field(min_length=1)
+    dataset_id: uuid.UUID | None = None
+    examples: list[EvalExampleInput] | None = None
+
+    @model_validator(mode="after")
+    def _exactly_one_source(self) -> EvalRunRequest:
+        if self.dataset_id and self.examples:
+            raise ValueError("dataset_id and examples are mutually exclusive")
+        if not self.dataset_id and not self.examples:
+            raise ValueError("Either dataset_id or examples must be provided")
+        return self
 
 
 class EvalRunResponse(BaseModel):
@@ -111,24 +125,50 @@ async def eval_run(
     request: EvalRunRequest,
     runner: Annotated[EvalRunner, Depends(get_eval_runner)],
     _user: Annotated[None, Depends(require_permission(Permission.EVAL_RUN))],
+    session: Annotated[AsyncSession, Depends(get_session)],
 ) -> EvalRunResponse:
     """Run evaluation on the provided dataset."""
-    dataset = EvalDataset(
-        name=request.dataset_name,
-        examples=[
+    if request.dataset_id:
+        # Load examples from DB
+        ds = await session.get(EvalDatasetRecord, request.dataset_id)
+        if ds is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Dataset {request.dataset_id} not found",
+            )
+
+        stmt = select(EvalExampleRecord).where(EvalExampleRecord.dataset_id == request.dataset_id)
+        db_result = await session.exec(stmt)
+        records = db_result.all()
+
+        examples = [
+            EvalExample(
+                query=r.query,
+                context=r.context,
+                answer=r.answer,
+                expected_answer=r.expected_answer,
+            )
+            for r in records
+        ]
+    else:
+        examples = [
             EvalExample(
                 query=ex.query,
                 context=ex.context,
                 answer=ex.answer,
                 expected_answer=ex.expected_answer,
             )
-            for ex in request.examples
-        ],
+            for ex in request.examples  # type: ignore[union-attr]
+        ]
+
+    dataset = EvalDataset(
+        name=request.dataset_name,
+        examples=examples,
     )
 
     try:
-        result = await runner.run(dataset)
+        run_result = await runner.run(dataset)
     except EvalError as e:
         raise HTTPException(status_code=502, detail=str(e)) from e
 
-    return _map_eval_result(result)
+    return _map_eval_result(run_result)

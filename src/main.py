@@ -58,6 +58,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(rag_router)
     application.include_router(agent_router)
     application.include_router(eval_router)
+
+    from src.api.routes.eval_datasets import router as eval_datasets_router
+
+    application.include_router(eval_datasets_router)
     application.include_router(admin_router)
 
     @application.get("/health")

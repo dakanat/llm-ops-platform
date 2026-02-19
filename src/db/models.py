@@ -111,3 +111,30 @@ class AuditLog(SQLModel, table=True):
         sa_column=Column(JSON, nullable=False, default={}),
     )
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class EvalDatasetRecord(SQLModel, table=True):
+    """Evaluation dataset record."""
+
+    __tablename__ = "eval_datasets"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    name: str = Field(unique=True, index=True)
+    description: str | None = Field(default=None, sa_column=Column(Text))
+    created_by: uuid.UUID = Field(foreign_key="users.id")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class EvalExampleRecord(SQLModel, table=True):
+    """Evaluation example record belonging to a dataset."""
+
+    __tablename__ = "eval_examples"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    dataset_id: uuid.UUID = Field(foreign_key="eval_datasets.id")
+    query: str = Field(sa_column=Column(Text, nullable=False))
+    context: str = Field(sa_column=Column(Text, nullable=False))
+    answer: str = Field(sa_column=Column(Text, nullable=False))
+    expected_answer: str | None = Field(default=None, sa_column=Column(Text))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

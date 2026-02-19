@@ -14,6 +14,7 @@ from src.config import Settings
 if TYPE_CHECKING:
     from src.agent.tools.registry import ToolRegistry
     from src.eval.runner import EvalRunner
+    from src.eval.synthetic_data import SyntheticDataGenerator
     from src.monitoring.cost_tracker import CostTracker
 from src.db.session import get_session
 from src.db.vector_store import VectorStore
@@ -115,6 +116,16 @@ def get_eval_runner() -> EvalRunner:
     from src.eval.runner import EvalRunner as _EvalRunner
 
     return _EvalRunner()
+
+
+def get_synthetic_data_generator(
+    provider: Annotated[LLMProvider, Depends(get_llm_provider)],
+    model: Annotated[str, Depends(get_llm_model)],
+) -> SyntheticDataGenerator:
+    """Return a SyntheticDataGenerator for generating synthetic QA pairs."""
+    from src.eval.synthetic_data import SyntheticDataGenerator as _SyntheticDataGenerator
+
+    return _SyntheticDataGenerator(llm_provider=provider, model=model)
 
 
 _cost_tracker: CostTracker | None = None

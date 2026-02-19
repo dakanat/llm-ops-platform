@@ -8,7 +8,16 @@ from sqlalchemy import Connection, pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 from sqlmodel import SQLModel
 from src.config import Settings
-from src.db.models import AuditLog, Chunk, Conversation, Document, Message, User  # noqa: F401
+from src.db.models import (  # noqa: F401
+    AuditLog,
+    Chunk,
+    Conversation,
+    Document,
+    EvalDatasetRecord,
+    EvalExampleRecord,
+    Message,
+    User,
+)
 
 config = context.config
 if config.config_file_name is not None:
