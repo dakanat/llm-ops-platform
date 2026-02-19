@@ -13,8 +13,8 @@ class TestSettings:
 
         settings = Settings()
 
-        assert settings.llm_provider == "openrouter"
-        assert settings.llm_model == "openai/gpt-oss-120b:free"
+        assert settings.llm_provider == "gemini"
+        assert settings.llm_model == "gemini-2.5-flash-lite"
         assert settings.embedding_base_url == "http://embedding:8001/v1"
         assert settings.embedding_model == "cl-nagoya/ruri-v3-310m"
         assert (

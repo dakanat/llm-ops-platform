@@ -4,6 +4,7 @@ import pytest
 from src.config import Settings
 from src.llm.providers.anthropic_provider import AnthropicProvider
 from src.llm.providers.base import LLMProvider
+from src.llm.providers.gemini_provider import GeminiProvider
 from src.llm.providers.openai_provider import OpenAIProvider
 from src.llm.providers.openrouter import OpenRouterProvider
 from src.llm.router import LLMRouter
@@ -12,12 +13,21 @@ from src.llm.router import LLMRouter
 class TestLLMRouter:
     """LLMRouter がプロバイダを正しく選択・生成すること。"""
 
-    def test_default_returns_openrouter_provider(self) -> None:
-        """デフォルト設定で OpenRouterProvider が返ること。"""
+    def test_default_returns_gemini_provider(self) -> None:
+        """デフォルト設定で GeminiProvider が返ること。"""
         router = LLMRouter()
         provider = router.get_provider()
 
-        assert isinstance(provider, OpenRouterProvider)
+        assert isinstance(provider, GeminiProvider)
+
+    def test_explicit_gemini_returns_gemini_provider(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """llm_provider="gemini" 明示で GeminiProvider が返ること。"""
+        monkeypatch.setenv("LLM_PROVIDER", "gemini")
+        settings = Settings()
+        router = LLMRouter(settings=settings)
+        provider = router.get_provider()
+
+        assert isinstance(provider, GeminiProvider)
 
     def test_explicit_openrouter_returns_openrouter_provider(
         self, monkeypatch: pytest.MonkeyPatch
@@ -47,6 +57,13 @@ class TestLLMRouter:
         provider = router.get_provider()
 
         assert isinstance(provider, AnthropicProvider)
+
+    def test_gemini_provider_satisfies_protocol(self) -> None:
+        """Gemini プロバイダが LLMProvider Protocol を満たすこと。"""
+        router = LLMRouter()
+        provider = router.get_provider()
+
+        assert isinstance(provider, LLMProvider)
 
     def test_openai_provider_satisfies_protocol(self) -> None:
         """OpenAI プロバイダが LLMProvider Protocol を満たすこと。"""
@@ -81,15 +98,15 @@ class TestLLMRouter:
         settings.llm_provider = "unknown"
         router = LLMRouter(settings=settings)
 
-        with pytest.raises(ValueError, match="Supported: openrouter, openai, anthropic"):
+        with pytest.raises(ValueError, match="Supported: gemini, openrouter, openai, anthropic"):
             router.get_provider()
 
     def test_model_property_returns_llm_model(self) -> None:
         """model プロパティが Settings の llm_model を返すこと。"""
-        settings = Settings(llm_model="openai/gpt-oss-120b:free")
+        settings = Settings(llm_model="gemini-2.5-flash-lite")
         router = LLMRouter(settings=settings)
 
-        assert router.model == "openai/gpt-oss-120b:free"
+        assert router.model == "gemini-2.5-flash-lite"
 
     def test_accepts_injected_settings(self) -> None:
         """Settings を直接注入できること。"""

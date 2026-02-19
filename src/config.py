@@ -13,8 +13,9 @@ class Settings(BaseSettings):
     )
 
     # LLM Provider
-    llm_provider: str = "openrouter"
-    llm_model: str = "openai/gpt-oss-120b:free"
+    llm_provider: str = "gemini"
+    llm_model: str = "gemini-2.5-flash-lite"
+    gemini_api_key: str = ""
     openrouter_api_key: str = ""
     openai_api_key: str = ""
     anthropic_api_key: str = ""
