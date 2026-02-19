@@ -1,4 +1,4 @@
-.PHONY: up down logs lint format typecheck test test-integration test-all test-no-llm coverage migrate seed eval cost-report
+.PHONY: up down logs lint format typecheck test test-integration test-all test-no-llm coverage migrate seed cost-report
 
 # 開発環境
 up:
@@ -41,10 +41,6 @@ migrate:
 
 seed:
 	uv run python scripts/seed_data.py
-
-# 評価
-eval:
-	uv run python scripts/run_eval.py
 
 # コストレポート
 cost-report:

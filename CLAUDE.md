@@ -44,7 +44,7 @@ PoCではなく本番運用を前提とし、品質・コスト・安全性の�
 #### テストの分類
 - **ユニットテスト** (`tests/unit/`): 外部依存はすべてモック。高速実行
 - **統合テスト** (`tests/integration/`): Docker Compose でDB等を起動して結合検証
-- **評価テスト** (`tests/eval/`): `@pytest.mark.llm` マーカー。`pytest -m "not llm"` でスキップ可能
+- **評価テスト**: `POST /eval/run` API 経由で実行。`@pytest.mark.llm` マーカー付きテストは `pytest -m "not llm"` でスキップ可能
 
 #### カバレッジ
 - 80%以上を目標。カバレッジが低い場合はテストの追加を優先する
@@ -77,8 +77,6 @@ make coverage              # pytest --cov=src --cov-report=html
 make migrate               # alembic upgrade head
 make seed                  # python scripts/seed_data.py
 
-# 評価
-make eval                  # python scripts/run_eval.py
 ```
 
 ## 環境変数 (.env.example)
@@ -117,7 +115,7 @@ COST_ALERT_THRESHOLD_DAILY_USD=10
 - LLM推論はOpenRouter API経由のためネットワーク接続が必要
 - vLLM embeddingコンテナの初回起動時にHugging Faceからモデルをダウンロード (約600MB)
 - テスト時、LLM API呼び出しを含むテストは `@pytest.mark.llm` でマーク。CIではスキップ可能
-- プロンプトテンプレート変更時は回帰テスト (`make eval`) を実行してからマージ
+- プロンプトテンプレート変更時は回帰テスト (`POST /eval/run` API) を実行してからマージ
 
 ## 詳細ドキュメント
 
@@ -146,7 +144,6 @@ COST_ALERT_THRESHOLD_DAILY_USD=10
 
 **5-4: 運用スクリプト**
 - `scripts/seed_data.py` — 初期データ投入 (admin/user/viewer)
-- `scripts/run_eval.py` — 評価一括実行CLI
 - `scripts/cost_report.py` — コストレポート生成
 
 **5-5: 統合テスト**
@@ -154,7 +151,3 @@ COST_ALERT_THRESHOLD_DAILY_USD=10
 - `tests/integration/test_agent_runtime.py` — ReActループ
 - `tests/integration/test_api_endpoints.py` — APIエンドポイント
 
-**5-6: 評価テストデータ + CI**
-- `tests/eval/test_sets/basic_qa.json` — ゴールドQAデータ
-- `tests/eval/regression_baseline.json` — 回帰テスト基準値
-- `.github/workflows/eval-regression.yml` — 実CI化

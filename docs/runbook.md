@@ -89,9 +89,7 @@ uv run alembic downgrade -1
 
 ### 評価
 
-```bash
-make eval    # 評価一括実行
-```
+評価は `POST /eval/run` API 経由で実行する。ユーザーが自身のデータセットを送信し、サーバー側でメトリクスを計算する。
 
 ## 環境変数
 

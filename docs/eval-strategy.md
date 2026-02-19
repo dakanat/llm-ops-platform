@@ -157,13 +157,12 @@ class SyntheticDataGenerator:
 - マークダウンコードフェンスの除去、不正アイテムのスキップに対応
 - `generate_from_chunks()` で複数チャンクから統合データセットを生成
 
-## CI 統合
+## API による評価実行
 
-```yaml
-# .github/workflows/eval-regression.yml (将来実装)
-# 1. 評価データセット (tests/eval/test_sets/) でメトリクスを計算
-# 2. ベースライン (tests/eval/regression_baseline.json) と比較
-# 3. 閾値を超える品質低下があれば CI を失敗させる
-```
+評価はハードコードされたデータではなく、`POST /eval/run` API 経由でユーザーが自身のデータセットを使って実行する。
+
+- ユーザーが `EvalDataset` を API リクエストで送信
+- サーバー側で `EvalRunner` がメトリクスを計算し、`EvalRunResult` を返却
+- 回帰テストは `compare_with_baseline()` で過去の結果と比較
 
 **テストマーカー**: `@pytest.mark.llm` — LLM API 呼び出しを含むテスト。`pytest -m "not llm"` でスキップ可能。

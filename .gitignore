@@ -33,5 +33,9 @@ uv.lock
 .claude/
 plans/
 
+# Eval outputs
+eval-outputs/
+eval-output.json
+
 # OS
 .DS_Store

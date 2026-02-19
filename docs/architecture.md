@@ -74,8 +74,7 @@ llm-ops-platform/
 │   └── db/                           # SQLModel モデル, pgvector, セッション管理
 ├── tests/
 │   ├── unit/                         # ユニットテスト (外部依存はモック)
-│   ├── integration/                  # 統合テスト (Docker DB 使用)
-│   └── eval/                         # 評価テスト (@pytest.mark.llm)
+│   └── integration/                  # 統合テスト (Docker DB 使用)
 ├── docs/                             # 設計ドキュメント
 └── scripts/                          # 運用スクリプト
 ```
