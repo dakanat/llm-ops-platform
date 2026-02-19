@@ -113,6 +113,7 @@ class TestOpenRouterProviderComplete:
     def _mock_response(self, data: dict[str, Any]) -> MagicMock:
         """httpx.Response のモックを作成。"""
         mock_resp = MagicMock(spec=httpx.Response)
+        mock_resp.status_code = 200
         mock_resp.json.return_value = data
         mock_resp.raise_for_status = MagicMock()
         return mock_resp
@@ -196,6 +197,7 @@ class TestOpenRouterProviderComplete:
     async def test_complete_raises_on_http_error(self, provider: OpenRouterProvider) -> None:
         """HTTPエラー時に例外が発生すること。"""
         mock_resp = MagicMock(spec=httpx.Response)
+        mock_resp.status_code = 401
         mock_resp.raise_for_status.side_effect = httpx.HTTPStatusError(
             "Server Error",
             request=MagicMock(spec=httpx.Request),

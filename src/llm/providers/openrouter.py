@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import AsyncGenerator
 from typing import Any
@@ -16,6 +17,32 @@ from src.llm.providers.base import (
 )
 
 _DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
+
+_MAX_RETRIES = 3
+_BASE_DELAY = 1.0  # seconds
+_MAX_DELAY = 30.0  # seconds
+_RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+
+
+def _calc_delay(response: httpx.Response, attempt: int) -> float:
+    """Calculate retry delay from Retry-After header or exponential backoff."""
+    retry_after = response.headers.get("retry-after")
+    if retry_after is not None:
+        try:
+            return float(retry_after)
+        except ValueError:
+            pass
+    delay: float = _BASE_DELAY * (2**attempt)
+    return min(delay, _MAX_DELAY)
+
+
+def _build_status_error(response: httpx.Response) -> httpx.HTTPStatusError:
+    """Build an HTTPStatusError from a response with a retryable status code."""
+    return httpx.HTTPStatusError(
+        f"{response.status_code} Error",
+        request=response.request if hasattr(response, "request") else httpx.Request("POST", ""),
+        response=response,
+    )
 
 
 class OpenRouterProvider:
@@ -47,19 +74,32 @@ class OpenRouterProvider:
             "messages": [m.model_dump() for m in messages],
             **kwargs,
         }
-        response = await self._client.post("/chat/completions", json=payload)
-        response.raise_for_status()
+        last_exc: httpx.HTTPStatusError | None = None
+        for attempt in range(_MAX_RETRIES + 1):
+            response = await self._client.post("/chat/completions", json=payload)
+            if response.status_code in _RETRYABLE_STATUS_CODES:
+                last_exc = _build_status_error(response)
+                if attempt < _MAX_RETRIES:
+                    delay = _calc_delay(response, attempt)
+                    await asyncio.sleep(delay)
+                    continue
+                raise last_exc
+            response.raise_for_status()
 
-        data = response.json()
-        choice = data["choices"][0]
-        usage_data = data.get("usage")
+            data = response.json()
+            choice = data["choices"][0]
+            usage_data = data.get("usage")
 
-        return LLMResponse(
-            content=choice["message"]["content"],
-            model=data["model"],
-            usage=TokenUsage(**usage_data) if usage_data else None,
-            finish_reason=choice.get("finish_reason"),
-        )
+            return LLMResponse(
+                content=choice["message"]["content"],
+                model=data["model"],
+                usage=TokenUsage(**usage_data) if usage_data else None,
+                finish_reason=choice.get("finish_reason"),
+            )
+
+        # Unreachable in practice, but satisfies the type checker.
+        assert last_exc is not None  # noqa: S101
+        raise last_exc
 
     async def stream(
         self,
@@ -74,23 +114,37 @@ class OpenRouterProvider:
             "stream": True,
             **kwargs,
         }
-        async with self._client.stream("POST", "/chat/completions", json=payload) as response:
-            response.raise_for_status()
-            async for line in response.aiter_lines():
-                if isinstance(line, bytes):
-                    line = line.decode("utf-8")
-                if not line.startswith("data: "):
-                    continue
-                data_str = line[len("data: ") :]
-                if data_str.strip() == "[DONE]":
-                    break
-                chunk_data = json.loads(data_str)
-                delta = chunk_data["choices"][0].get("delta", {})
-                content = delta.get("content", "")
-                if not content:
-                    continue
-                finish_reason = chunk_data["choices"][0].get("finish_reason")
-                yield LLMChunk(content=content, finish_reason=finish_reason)
+        last_exc: httpx.HTTPStatusError | None = None
+        for attempt in range(_MAX_RETRIES + 1):
+            async with self._client.stream("POST", "/chat/completions", json=payload) as response:
+                if response.status_code in _RETRYABLE_STATUS_CODES:
+                    last_exc = _build_status_error(response)
+                    if attempt < _MAX_RETRIES:
+                        delay = _calc_delay(response, attempt)
+                        await asyncio.sleep(delay)
+                        continue
+                    raise last_exc
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if isinstance(line, bytes):
+                        line = line.decode("utf-8")
+                    if not line.startswith("data: "):
+                        continue
+                    data_str = line[len("data: ") :]
+                    if data_str.strip() == "[DONE]":
+                        break
+                    chunk_data = json.loads(data_str)
+                    delta = chunk_data["choices"][0].get("delta", {})
+                    content = delta.get("content", "")
+                    if not content:
+                        continue
+                    finish_reason = chunk_data["choices"][0].get("finish_reason")
+                    yield LLMChunk(content=content, finish_reason=finish_reason)
+                return
+
+        # Unreachable in practice, but satisfies the type checker.
+        assert last_exc is not None  # noqa: S101
+        raise last_exc
 
     async def close(self) -> None:
         """Close the underlying HTTP client."""
