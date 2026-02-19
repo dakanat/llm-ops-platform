@@ -7,12 +7,21 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
-from src.rag.embedder import Embedder, EmbeddingError
+from src.rag.embedder import Embedder, EmbedderProtocol, EmbeddingError
 
 
 def _make_embedding(dimensions: int = 1024, index: int = 0) -> dict[str, Any]:
     """テスト用の embedding レスポンスオブジェクトを生成。"""
     return {"embedding": [0.1 * (index + 1)] * dimensions, "index": index}
+
+
+class TestEmbedderProtocol:
+    """Embedder が EmbedderProtocol を満たすことのテスト。"""
+
+    def test_embedder_satisfies_protocol(self) -> None:
+        """Embedder が EmbedderProtocol の runtime_checkable を満たすこと。"""
+        embedder = Embedder(base_url="http://localhost:8001/v1", model="test-model")
+        assert isinstance(embedder, EmbedderProtocol)
 
 
 class TestEmbedderEmbed:

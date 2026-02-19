@@ -10,12 +10,15 @@ import hashlib
 import json
 import math
 import uuid
+from typing import TYPE_CHECKING
 
 import structlog
 from redis.asyncio import Redis
 
 from src.llm.providers.base import ChatMessage, LLMResponse, Role
-from src.rag.embedder import Embedder
+
+if TYPE_CHECKING:
+    from src.rag.embedder import EmbedderProtocol
 
 logger = structlog.get_logger()
 
@@ -34,7 +37,7 @@ class SemanticCache:
     def __init__(
         self,
         redis_client: Redis,
-        embedder: Embedder,
+        embedder: EmbedderProtocol,
         ttl_seconds: int = 3600,
         similarity_threshold: float = 0.95,
     ) -> None:

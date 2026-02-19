@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import uuid
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
 
 from src.db.models import Chunk
 from src.db.vector_store import VectorStore, VectorStoreError
-from src.rag.embedder import Embedder, EmbeddingError
+from src.rag.embedder import EmbeddingError
+
+if TYPE_CHECKING:
+    from src.rag.embedder import EmbedderProtocol
 
 
 class RetrievalError(Exception):
@@ -35,7 +39,7 @@ class Retriever:
     クエリテキストを Embedding に変換し、VectorStore で類似チャンクを検索する。
     """
 
-    def __init__(self, embedder: Embedder, vector_store: VectorStore) -> None:
+    def __init__(self, embedder: EmbedderProtocol, vector_store: VectorStore) -> None:
         self._embedder = embedder
         self._vector_store = vector_store
 

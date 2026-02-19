@@ -2,11 +2,28 @@
 
 from __future__ import annotations
 
+from typing import Protocol, runtime_checkable
+
 import httpx
 
 
 class EmbeddingError(Exception):
     """Embedding リクエストに関するエラー。"""
+
+
+@runtime_checkable
+class EmbedderProtocol(Protocol):
+    """Embedder の共通インターフェース。
+
+    ローカル vLLM / Gemini API 等、複数の Embedding バックエンドを
+    統一的に扱うための Protocol。
+    """
+
+    async def embed(self, text: str) -> list[float]: ...
+
+    async def embed_batch(self, texts: list[str]) -> list[list[float]]: ...
+
+    async def close(self) -> None: ...
 
 
 class Embedder:

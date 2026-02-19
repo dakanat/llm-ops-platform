@@ -125,10 +125,10 @@ class TestRAGQueryEndpointIntegration:
         index_manager = IndexManager(
             preprocessor=preprocessor,
             chunker=chunker,
-            embedder=embedder,  # type: ignore[arg-type]
+            embedder=embedder,
             vector_store=vector_store,
         )
-        retriever = Retriever(embedder=embedder, vector_store=vector_store)  # type: ignore[arg-type]
+        retriever = Retriever(embedder=embedder, vector_store=vector_store)
         provider = make_mock_llm_provider(content=llm_content)
         generator = Generator(llm_provider=provider, model="test-model")
         return RAGPipeline(

@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from src.db.models import Chunk, Document
 from src.db.vector_store import VectorStore, VectorStoreError
 from src.rag.chunker import RecursiveCharacterSplitter
-from src.rag.embedder import Embedder, EmbeddingError
+from src.rag.embedder import EmbeddingError
 from src.rag.preprocessor import PreprocessingError, Preprocessor
+
+if TYPE_CHECKING:
+    from src.rag.embedder import EmbedderProtocol
 
 
 class IndexingError(Exception):
@@ -24,7 +29,7 @@ class IndexManager:
         self,
         preprocessor: Preprocessor,
         chunker: RecursiveCharacterSplitter,
-        embedder: Embedder,
+        embedder: EmbedderProtocol,
         vector_store: VectorStore,
     ) -> None:
         self._preprocessor = preprocessor

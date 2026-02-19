@@ -45,7 +45,7 @@ class TestDocumentIndexing:
         return IndexManager(
             preprocessor=Preprocessor(),
             chunker=RecursiveCharacterSplitter(chunk_size=128, chunk_overlap=16),
-            embedder=embedder or FakeEmbedder(),  # type: ignore[arg-type]
+            embedder=embedder or FakeEmbedder(),
             vector_store=VectorStore(session=db_session),
         )
 
@@ -262,10 +262,10 @@ class TestRAGPipelineEndToEnd:
         index_manager = IndexManager(
             preprocessor=preprocessor,
             chunker=chunker,
-            embedder=embedder,  # type: ignore[arg-type]
+            embedder=embedder,
             vector_store=vector_store,
         )
-        retriever = Retriever(embedder=embedder, vector_store=vector_store)  # type: ignore[arg-type]
+        retriever = Retriever(embedder=embedder, vector_store=vector_store)
         provider = make_mock_llm_provider(content=llm_content)
         generator = Generator(llm_provider=provider, model="test-model")
 
