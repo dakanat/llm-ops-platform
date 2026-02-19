@@ -7,7 +7,7 @@
 RAG・Agent・評価・監視・セキュリティを統合した、エンタープライズ向けLLMプラットフォーム。
 PoCではなく本番運用を前提とし、品質・コスト・安全性のトレードオフを考慮した設計。
 
-**ローカル実行前提**: VRAM 8GB環境で動作。Embeddingはローカルvllmサーバー(別コンテナ)、LLM推論はGemini API経由（デフォルト）。
+**ローカル実行前提**: Embedding はデフォルトで Gemini API (`gemini-embedding-001`) を使用（GPU 不要）。ローカル vLLM サーバー (`cl-nagoya/ruri-v3-310m`) も代替として利用可能（VRAM 8GB 環境向け）。LLM 推論は Gemini API 経由（デフォルト）。
 
 ## 開発ルール
 
@@ -90,7 +90,11 @@ GEMINI_API_KEY=your-key-here
 # OpenRouter (alternative)
 OPENROUTER_API_KEY=your-key-here
 
-# Embedding (local vLLM server)
+# Embedding: gemini | local
+EMBEDDING_PROVIDER=gemini
+EMBEDDING_GEMINI_MODEL=gemini-embedding-001
+
+# Embedding (local vLLM server — used when EMBEDDING_PROVIDER=local)
 EMBEDDING_BASE_URL=http://embedding:8001/v1
 EMBEDDING_MODEL=cl-nagoya/ruri-v3-310m
 
@@ -114,9 +118,9 @@ COST_ALERT_THRESHOLD_DAILY_USD=10
 
 - **TDD厳守**: 実装コードを書く前に必ずテストを書く。テストなしの実装コミットは禁止
 - **コミット粒度**: Red→Green は1コミットにまとめてよいが、テストなしの実装コミットは禁止
-- VRAM 8GB環境前提。ruri-v3-310m (~620MB VRAM) + vLLMオーバーヘッドで計約1-2GB使用
+- Embedding はデフォルトで Gemini API (`gemini-embedding-001`, 無料枠 100 RPM / 1,000 RPD) を使用。GPU 不要
+- ローカル vLLM Embedding を使う場合は `EMBEDDING_PROVIDER=local` に変更し `docker compose --profile local-embedding up` で起動。VRAM 8GB 環境前提 (~1-2GB 使用)
 - LLM推論はGemini API経由（デフォルト）のためネットワーク接続が必要
-- vLLM embeddingコンテナの初回起動時にHugging Faceからモデルをダウンロード (約600MB)
 - テスト時、LLM API呼び出しを含むテストは `@pytest.mark.llm` でマーク。CIではスキップ可能
 - プロンプトテンプレート変更時は回帰テスト (`POST /eval/run` API) を実行してからマージ
 

@@ -3,7 +3,7 @@
 ## システム概要
 
 LLM Ops Platform は RAG・Agent・評価・監視・セキュリティを統合したエンタープライズ向け LLM プラットフォーム。
-ローカル VRAM 8GB 環境で動作し、Embedding はローカル vLLM サーバー、LLM 推論は Gemini API 経由（デフォルト）。
+Embedding はデフォルトで Gemini API (`gemini-embedding-001`) を使用（GPU 不要）。ローカル vLLM (`cl-nagoya/ruri-v3-310m`) も代替として利用可能。LLM 推論は Gemini API 経由（デフォルト）。
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -16,7 +16,7 @@ LLM Ops Platform は RAG・Agent・評価・監視・セキュリティを統合
 │              LLM Router (プロバイダ切替・フォールバック)       │
 │    Gemini API (デフォルト) / OpenRouter / OpenAI / Anthropic  │
 ├─────────────────────────────────────────────────────────────┤
-│  PostgreSQL 16 + pgvector  │  Redis  │  vLLM Embedding     │
+│  PostgreSQL 16 + pgvector  │  Redis  │  Gemini Embedding   │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -27,11 +27,11 @@ LLM Ops Platform は RAG・Agent・評価・監視・セキュリティを統合
 | app | Dockerfile (FastAPI) | メイン API | 8000 |
 | db | pgvector/pgvector:pg16 | PostgreSQL 16 + pgvector | 5432 |
 | redis | redis:7-alpine | キャッシュ・セッション・レート制限 | 6379 |
-| embedding | vllm/vllm-openai:latest | vLLM Embedding サーバー (cl-nagoya/ruri-v3-310m) | 8001 |
+| embedding | vllm/vllm-openai:latest | vLLM Embedding サーバー (cl-nagoya/ruri-v3-310m) — `local-embedding` profile | 8001 |
 
 **ボリューム**: `pgdata` (PostgreSQL), `redisdata` (Redis), `hf_cache` (Hugging Face モデル)
 
-**起動順序**: db + redis + embedding が並列起動 → db/redis の healthcheck 完了後に app が起動
+**起動順序**: db + redis が並列起動 → healthcheck 完了後に app が起動。embedding サービスは `--profile local-embedding` 指定時のみ起動
 
 ## 技術スタック
 
@@ -41,7 +41,7 @@ LLM Ops Platform は RAG・Agent・評価・監視・セキュリティを統合
 | フレームワーク | FastAPI, Pydantic v2 |
 | ORM | SQLModel (SQLAlchemy + Pydantic 統合) |
 | LLM API | Gemini API (デフォルト: gemini-2.5-flash-lite 無料枠) — OpenRouter, OpenAI, Anthropic に切替可能 |
-| Embedding | cl-nagoya/ruri-v3-310m (vLLM ローカルサーバー, 1024 次元) |
+| Embedding | Gemini API `gemini-embedding-001` (デフォルト, 1024 次元) / cl-nagoya/ruri-v3-310m (vLLM ローカル代替) |
 | Vector DB | pgvector (PostgreSQL 16 拡張, cosine distance) |
 | キャッシュ | Redis 7 (セマンティックキャッシュ, レート制限) |
 | PII 検出 | 正規表現ベース (日本語対応: メール, 電話, マイナンバー, クレカ, 住所) |
@@ -126,10 +126,15 @@ users (id, email, name, hashed_password, role, is_active)
 
 ### Embedding
 
-- vLLM サーバー (`embedding` コンテナ, ポート 8001)
-- モデル: `cl-nagoya/ruri-v3-310m` (日本語特化, 310M パラメータ, VRAM ~1GB)
-- 出力次元: 1024
-- OpenAI 互換 API (`/v1/embeddings`) で httpx AsyncClient からアクセス
+`EmbedderProtocol` (`src/rag/embedder.py`) で統一インターフェースを提供し、2 つの実装を切替可能。
+
+| プロバイダ | 実装 | モデル | 次元数 | 特徴 |
+|-----------|------|--------|--------|------|
+| `gemini` (デフォルト) | `GeminiEmbedder` | `gemini-embedding-001` | 1024 (`outputDimensionality`) | GPU 不要、無料枠 (100 RPM / 1,000 RPD) |
+| `local` | `Embedder` | `cl-nagoya/ruri-v3-310m` | 1024 | 日本語特化、vLLM ローカルサーバー (VRAM ~1GB) |
+
+- `EMBEDDING_PROVIDER` 環境変数で切替
+- `_create_embedder()` ファクトリ関数 (`src/api/dependencies.py`) でインスタンス生成
 
 ### セマンティックキャッシュ
 
@@ -143,7 +148,7 @@ users (id, email, name, hashed_password, role, is_active)
 ### 品質 vs コスト
 - デフォルトは Gemini 無料枠 (gemini-2.5-flash-lite)。品質要件に応じてプロバイダ/モデルを切替
 - セマンティックキャッシュで同一・類似クエリの API 呼び出しを削減
-- Embedding はローカル vLLM 実行で API 費用ゼロ
+- Embedding はデフォルトで Gemini 無料枠 (gemini-embedding-001)。ローカル vLLM も選択可能
 
 ### 品質 vs レイテンシ
 - ストリーミングレスポンスで TTFT (Time to First Token) を最適化

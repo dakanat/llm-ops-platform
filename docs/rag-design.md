@@ -16,7 +16,7 @@ Preprocessor.normalize()      — NFKC 正規化, 空白正規化, 改行正規�
   ↓
 RecursiveCharacterSplitter.split() — チャンク分割 (512 文字, overlap 64)
   ↓
-Embedder.embed_batch()        — vLLM サーバーでベクトル化 (1024 次元)
+EmbedderProtocol.embed_batch() — Gemini API or vLLM でベクトル化 (1024 次元)
   ↓
 VectorStore.save_chunks()     — pgvector に保存
 ```
@@ -68,21 +68,34 @@ GenerationResult (answer + sources + usage)
 
 **出力**: `TextChunk(content, index, start, end)` のリスト
 
-### Embedder (`src/rag/embedder.py`)
+### EmbedderProtocol (`src/rag/embedder.py`)
 
-vLLM ローカルサーバーに OpenAI 互換 API でリクエストを送る。
+`EmbedderProtocol` で統一インターフェースを定義し、2 つの実装を提供する。
 
 ```python
-class Embedder:
-    def __init__(self, base_url: str, model: str) -> None: ...
-    async def embed(self, text: str) -> list[float]: ...        # 単一テキスト
-    async def embed_batch(self, texts: list[str]) -> list[list[float]]: ...  # バッチ
+@runtime_checkable
+class EmbedderProtocol(Protocol):
+    async def embed(self, text: str) -> list[float]: ...
+    async def embed_batch(self, texts: list[str]) -> list[list[float]]: ...
     async def close(self) -> None: ...
 ```
 
-- エンドポイント: `POST {base_url}/embeddings`
-- 出力次元: 1024 (ruri-v3-310m)
-- 空テキスト・空リストは `EmbeddingError` を送出
+#### Embedder (ローカル vLLM) — `src/rag/embedder.py`
+
+- エンドポイント: `POST {base_url}/embeddings` (OpenAI 互換)
+- モデル: `cl-nagoya/ruri-v3-310m` (1024 次元)
+- `EMBEDDING_PROVIDER=local` で有効化
+
+#### GeminiEmbedder (Gemini API) — `src/rag/gemini_embedder.py`
+
+- 単一: `POST /v1beta/models/{model}:embedContent`
+- バッチ: `POST /v1beta/models/{model}:batchEmbedContents` (100 件/リクエスト、自動分割)
+- モデル: `gemini-embedding-001` (`outputDimensionality=1024`)
+- 認証: `?key=API_KEY` クエリパラメータ
+- リトライ: exponential backoff (429/5xx, max 5 回, Retry-After 尊重)
+- `EMBEDDING_PROVIDER=gemini` (デフォルト) で有効化
+
+**共通**: 出力次元 1024、空テキスト・空リストは `EmbeddingError` を送出
 
 ### VectorStore (`src/db/vector_store.py`)
 
@@ -110,7 +123,7 @@ Embedder + VectorStore のラッパー。
 
 ```python
 class Retriever:
-    def __init__(self, embedder: Embedder, vector_store: VectorStore) -> None: ...
+    def __init__(self, embedder: EmbedderProtocol, vector_store: VectorStore) -> None: ...
     async def search(
         self, query: str, top_k: int = 5, document_id: UUID | None = None
     ) -> list[RetrievedChunk]: ...
