@@ -34,6 +34,7 @@ async def client(test_app: FastAPI) -> AsyncGenerator[AsyncClient, None]:
 def _make_mock_session() -> AsyncMock:
     """Create a mock session for registration tests."""
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()  # add() is synchronous in SQLAlchemy
     mock_result = MagicMock()
     mock_result.first.return_value = None
     mock_session.exec.return_value = mock_result

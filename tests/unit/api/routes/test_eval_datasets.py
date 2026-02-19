@@ -74,6 +74,7 @@ def _make_session(
 ) -> AsyncMock:
     """Create a mock async session."""
     session = AsyncMock()
+    session.add = MagicMock()  # add() is synchronous in SQLAlchemy
 
     # exec returns a result proxy that has .all() and .first()
     result_proxy = MagicMock()

@@ -57,6 +57,7 @@ class TestSeedUsersCreatesNewUsers:
         mock_result.first.return_value = None
 
         session = AsyncMock()
+        session.add = MagicMock()  # add() is synchronous in SQLAlchemy
         session.exec.return_value = mock_result
 
         with patch("scripts.seed_data.hash_password", return_value="hashed"):
@@ -72,6 +73,7 @@ class TestSeedUsersCreatesNewUsers:
         mock_result.first.return_value = None
 
         session = AsyncMock()
+        session.add = MagicMock()  # add() is synchronous in SQLAlchemy
         session.exec.return_value = mock_result
 
         with patch("scripts.seed_data.hash_password", return_value="hashed"):
@@ -86,6 +88,7 @@ class TestSeedUsersCreatesNewUsers:
         mock_result.first.return_value = None
 
         session = AsyncMock()
+        session.add = MagicMock()  # add() is synchronous in SQLAlchemy
         session.exec.return_value = mock_result
 
         with patch("scripts.seed_data.hash_password", return_value="hashed"):
@@ -105,6 +108,7 @@ class TestSeedUsersSkipsExisting:
         mock_result.first.return_value = existing_user
 
         session = AsyncMock()
+        session.add = MagicMock()  # add() is synchronous in SQLAlchemy
         session.exec.return_value = mock_result
 
         results = await seed_users(session)
@@ -120,6 +124,7 @@ class TestSeedUsersSkipsExisting:
         mock_result.first.return_value = existing_user
 
         session = AsyncMock()
+        session.add = MagicMock()  # add() is synchronous in SQLAlchemy
         session.exec.return_value = mock_result
 
         results = await seed_users(session)
@@ -143,6 +148,7 @@ class TestSeedUsersIdempotency:
         result_not_exists.first.return_value = None
 
         session = AsyncMock()
+        session.add = MagicMock()  # add() is synchronous in SQLAlchemy
         session.exec.side_effect = [result_exists, result_not_exists, result_exists]
 
         with patch("scripts.seed_data.hash_password", return_value="hashed"):
@@ -165,6 +171,7 @@ class TestSeedUsersPasswordHashing:
         mock_result.first.return_value = None
 
         session = AsyncMock()
+        session.add = MagicMock()  # add() is synchronous in SQLAlchemy
         session.exec.return_value = mock_result
 
         with patch("scripts.seed_data.hash_password", return_value="hashed") as mock_hash:
@@ -183,6 +190,7 @@ class TestSeedUsersPasswordHashing:
         mock_result.first.return_value = None
 
         session = AsyncMock()
+        session.add = MagicMock()  # add() is synchronous in SQLAlchemy
         session.exec.return_value = mock_result
 
         with patch("scripts.seed_data.hash_password", return_value="bcrypt-hashed-value"):

@@ -13,6 +13,7 @@ from src.db.session import get_session
 def _make_session() -> AsyncMock:
     """Create a mock async session."""
     session = AsyncMock()
+    session.add = MagicMock()  # add() is synchronous in SQLAlchemy
     result_proxy = MagicMock()
     result_proxy.all.return_value = []
     result_proxy.first.return_value = None
