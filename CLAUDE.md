@@ -106,8 +106,12 @@ REDIS_URL=redis://redis:6379/0
 
 # Security
 JWT_SECRET_KEY=change-me-in-production
+CSRF_SECRET_KEY=change-me-csrf-secret
 PII_DETECTION_ENABLED=true
 PROMPT_INJECTION_DETECTION_ENABLED=true
+
+# Web Frontend
+SESSION_COOKIE_SECURE=false  # Set true in production (HTTPS)
 
 # Monitoring
 LOG_LEVEL=INFO
@@ -157,4 +161,18 @@ COST_ALERT_THRESHOLD_DAILY_USD=10
 - `tests/integration/test_rag_pipeline.py` — RAGフロー (Docker DB使用)
 - `tests/integration/test_agent_runtime.py` — ReActループ
 - `tests/integration/test_api_endpoints.py` — APIエンドポイント
+
+**5-6: Webフロントエンド** ✅
+- `src/web/` — htmx + DaisyUI によるWebフロントエンド（CDN配信、ビルドステップ不要）
+- `src/web/routes/auth.py` — ログイン/ログアウト（HttpOnly Cookie JWT）
+- `src/web/routes/chat.py` — チャットUI（SSEストリーミング対応）
+- `src/web/routes/rag.py` — RAGクエリUI
+- `src/web/routes/agent.py` — Agent実行UI（ステップ表示）
+- `src/web/routes/eval.py` — 評価実行ダッシュボード
+- `src/web/routes/eval_datasets.py` — データセット一覧/詳細/作成フォーム
+- `src/web/routes/admin.py` — 管理ダッシュボード（コストレポート自動更新）
+- `src/web/csrf.py` — CSRF double-submit cookie保護
+- `src/web/dependencies.py` — Cookie認証DI（WebAuthRedirect例外）
+- `src/web/templates.py` — Jinja2テンプレート設定
+- テスト: `tests/unit/web/` (42テスト)
 
