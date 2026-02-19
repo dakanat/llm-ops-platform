@@ -101,7 +101,7 @@ uv run alembic downgrade -1
 | `OPENROUTER_API_KEY` | — | OpenRouter API キー |
 | `EMBEDDING_BASE_URL` | `http://embedding:8001/v1` | Embedding サーバー URL |
 | `EMBEDDING_MODEL` | `cl-nagoya/ruri-v3-310m` | Embedding モデル名 |
-| `DATABASE_URL` | `postgresql+asyncpg://postgres:postgres@db:5432/llm_platform` | DB 接続 URL |
+| `DATABASE_URL` | `postgresql+asyncpg://postgres:postgres@localhost:5432/llm_platform` | DB 接続 URL |
 | `REDIS_URL` | `redis://redis:6379/0` | Redis 接続 URL |
 | `JWT_SECRET_KEY` | — | JWT 署名シークレット (**本番では必ず変更**) |
 | `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | JWT 有効期限 (分) |
