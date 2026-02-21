@@ -121,7 +121,9 @@ users (id, email, name, hashed_password, role, is_active)
   │     └── 1:N chunks (id, content, chunk_index, embedding[Vector(1024)])
   ├── 1:N conversations (id, title, user_id)
   │     └── 1:N messages (id, role, content, token_count)
-  └── 1:N audit_logs (id, action, resource_type, resource_id, details)
+  ├── 1:N audit_logs (id, action, resource_type, resource_id, details)
+  └── 1:N eval_datasets (id, name, description, created_by)
+        └── 1:N eval_examples (id, dataset_id, query, expected_answer)
 ```
 
 ### Embedding

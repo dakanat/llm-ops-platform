@@ -58,30 +58,15 @@ def parse_evaluation_response(content: str) -> tuple[float, str]:
     Score は 0.0-1.0 にクランプ。"""
 ```
 
-## 評価実行
+## データセット
 
-### EvalRunner (`src/eval/runner.py`)
+### インメモリモデル (`src/eval/datasets.py`)
 
-データセットに対してメトリクスを一括実行する。
-
-```python
-class EvalRunner:
-    def __init__(
-        self,
-        faithfulness: FaithfulnessMetric | None = None,
-        relevance: RelevanceMetric | None = None,
-    ) -> None: ...
-
-    async def run(self, dataset: EvalDataset) -> EvalRunResult: ...
-```
-
-**EvalDataset**: 評価用データセット
+評価実行時に使用するデータ構造。
 
 ```python
 class EvalExample(BaseModel):
     query: str
-    context: str
-    answer: str
     expected_answer: str | None = None
 
 class EvalDataset(BaseModel):
@@ -89,21 +74,103 @@ class EvalDataset(BaseModel):
     examples: list[EvalExample]
 ```
 
+- `load_dataset(path)` / `save_dataset(dataset, path)` で JSON ファイルの読み書きが可能
+
+### DB モデル (`src/db/models.py`)
+
+永続化されたデータセット。Web UI・API からの CRUD に使用。
+
+```python
+class EvalDatasetRecord(SQLModel, table=True):
+    __tablename__ = "eval_datasets"
+    id: UUID
+    name: str          # unique, indexed
+    description: str | None
+    created_by: UUID   # FK → users.id
+    created_at: datetime
+    updated_at: datetime
+
+class EvalExampleRecord(SQLModel, table=True):
+    __tablename__ = "eval_examples"
+    id: UUID
+    dataset_id: UUID   # FK → eval_datasets.id
+    query: str
+    expected_answer: str | None
+    created_at: datetime
+```
+
+### 合成データ生成 (`src/eval/synthetic_data.py`)
+
+ドキュメントテキストから LLM で QA ペアを自動生成。
+
+```python
+class SyntheticDataGenerator:
+    def __init__(
+        self, llm_provider: LLMProvider, model: str, num_pairs: int = 3
+    ) -> None: ...
+
+    async def generate(self, text: str, num_pairs: int | None = None) -> EvalDataset: ...
+    async def generate_from_chunks(
+        self, chunks: list[str], num_pairs_per_chunk: int | None = None
+    ) -> EvalDataset: ...
+```
+
+- LLM に JSON 配列形式で QA ペアを生成させる
+- マークダウンコードフェンスの除去、不正アイテムのスキップに対応
+- `generate_from_chunks()` で複数チャンクから統合データセットを生成
+
+## 評価実行
+
+### EvalRunner (`src/eval/runner.py`)
+
+データセットに対してメトリクスを一括実行する。各クエリを RAGPipeline に通して実際の回答・コンテキストを取得し、メトリクスで採点する。
+
+```python
+class EvalRunner:
+    def __init__(
+        self,
+        pipeline: RAGPipeline,
+        faithfulness_metric: FaithfulnessMetric | None = None,
+        relevance_metric: RelevanceMetric | None = None,
+    ) -> None: ...
+
+    async def run(self, dataset: EvalDataset) -> EvalRunResult: ...
+```
+
+**実行フロー** (1件のサンプルあたり):
+1. `pipeline.query(example.query)` で RAG パイプラインを実行し、回答とコンテキストを取得
+2. `time.perf_counter()` でレイテンシを計測
+3. `faithfulness_metric.evaluate(context, answer)` で忠実性を採点
+4. `relevance_metric.evaluate(query, answer)` で関連性を採点
+5. 例外が発生した場合は `ExampleResult.error` に記録して続行 (全体を止めない)
+
+**ExampleResult**: 1件の評価結果
+
+```python
+class ExampleResult(BaseModel):
+    query: str
+    expected_answer: str | None = None
+    rag_answer: str | None = None
+    rag_context: str | None = None
+    faithfulness_score: float | None = None
+    relevance_score: float | None = None
+    latency_seconds: float | None = None
+    error: str | None = None
+```
+
 **EvalRunResult**: 各サンプルの結果 + 統計サマリ
 
 ```python
 class EvalRunResult(BaseModel):
     dataset_name: str
-    results: list[EvalSampleResult]
+    results: list[ExampleResult]
     faithfulness_summary: MetricSummary | None
     relevance_summary: MetricSummary | None
+    latency_summary: MetricSummary | None
 
 class MetricSummary(BaseModel):
     mean: float
-    median: float
-    min: float
-    max: float
-    std: float
+    count: int
 ```
 
 - メトリクスが None の場合はスキップ
@@ -126,7 +193,7 @@ class RegressionResult(BaseModel):
     current_relevance: float | None
     baseline_relevance: float | None
 
-def compare_with_baseline(
+def compare(
     current: EvalRunResult,
     baseline: EvalRunResult,
     thresholds: RegressionThresholds | None = None,
@@ -136,33 +203,53 @@ def compare_with_baseline(
 - baseline の `mean` と current の `mean` の差が閾値を超えたら FAIL
 - faithfulness/relevance それぞれ独立に判定
 - サマリが無い場合は SKIP
-
-## 合成データ生成 (`src/eval/synthetic_data.py`)
-
-ドキュメントテキストから LLM で QA ペアを自動生成。
-
-```python
-class SyntheticDataGenerator:
-    def __init__(
-        self, llm_provider: LLMProvider, model: str, num_pairs: int = 3
-    ) -> None: ...
-
-    async def generate(self, text: str, num_pairs: int | None = None) -> EvalDataset: ...
-    async def generate_from_chunks(
-        self, chunks: list[str], num_pairs_per_chunk: int | None = None
-    ) -> EvalDataset: ...
-```
-
-- LLM に JSON 配列形式で QA ペアを生成させる
-- マークダウンコードフェンスの除去、不正アイテムのスキップに対応
-- `generate_from_chunks()` で複数チャンクから統合データセットを生成
+- `load_baseline()` / `save_baseline()` で JSON ファイルの読み書きが可能
 
 ## API による評価実行
 
-評価はハードコードされたデータではなく、`POST /eval/run` API 経由でユーザーが自身のデータセットを使って実行する。
+### REST API — `POST /eval/run`
 
-- ユーザーが `EvalDataset` を API リクエストで送信
-- サーバー側で `EvalRunner` がメトリクスを計算し、`EvalRunResult` を返却
-- 回帰テストは `compare_with_baseline()` で過去の結果と比較
+```python
+class EvalRunRequest(BaseModel):
+    dataset_name: str
+    dataset_id: UUID | None = None       # DB に保存済みのデータセット
+    examples: list[EvalExampleInput] | None = None  # インライン指定
+
+    # dataset_id と examples は排他 (どちらか一方のみ)
+```
+
+- `dataset_id` 指定: DB から `EvalDatasetRecord` + `EvalExampleRecord` をロード
+- `examples` 指定: リクエストボディ内のインライン例を使用
+- レスポンス: `EvalRunResponse` (各サンプルの結果 + メトリクスサマリ)
+- 権限: `EVAL_RUN` パーミッション (admin / user のみ、viewer は不可)
+
+### Web UI — `/web/eval`
+
+Eval Dashboard (htmx ベース) から DB 保存済みデータセットを選択して評価を実行する。
+
+**データセット選択**:
+- `GET /web/eval` で DB のデータセット一覧を取得し、`<select>` ドロップダウンで表示
+- 各選択肢にデータセット名とサンプル数を表示 (例: `my-dataset (10 examples)`)
+- データセットが存在しない場合は作成ページへのリンクを表示
+
+**評価実行**:
+- `POST /web/eval/run` にフォームで `dataset_id` を送信
+- サーバー側で DB からデータセットをロードし、`EvalRunner` で評価を実行
+- 結果は htmx で `eval/run_result.html` テンプレートにインラインレンダリング
+
+**結果表示**:
+- サマリ統計 (Faithfulness / Relevance / Latency の平均値とサンプル数)
+- 詳細テーブル (Query, RAG Answer, Expected, スコア, Error)
+- 長いテキストはクリックで展開/折りたたみ可能 (`toggleExpand()`)
+
+### データセット管理 — `/web/eval/datasets`
+
+| エンドポイント | 説明 |
+|---|---|
+| `GET /web/eval/datasets` | データセット一覧 (名前, 説明, サンプル数, 作成日) |
+| `GET /web/eval/datasets/create` | 作成フォーム (Manual / Generate タブ切替) |
+| `POST /api/eval/datasets` | Manual: JSON 配列で examples を直接指定して作成 |
+| `POST /web/eval/datasets/generate` | Generate: ソーステキストから LLM で QA ペアを自動生成 |
+| `GET /web/eval/datasets/{id}` | データセット詳細 (全 examples をテーブル表示) |
 
 **テストマーカー**: `@pytest.mark.llm` — LLM API 呼び出しを含むテスト。`pytest -m "not llm"` でスキップ可能。
