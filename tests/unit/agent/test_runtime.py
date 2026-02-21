@@ -407,6 +407,174 @@ class TestLLMCallSequence:
         assert "42" in messages[3].content
 
 
+# ── Conversation history ─────────────────────────────────────
+
+
+class TestConversationHistory:
+    """会話履歴パススルーのテスト。"""
+
+    @pytest.mark.asyncio
+    async def test_conversation_history_passed_to_llm(self) -> None:
+        provider = _make_mock_provider(["Thought: Done\nFinal Answer: yes"])
+        runtime = AgentRuntime(
+            llm_provider=provider,
+            model="m",
+            tool_registry=ToolRegistry(),
+        )
+        history = [
+            ChatMessage(role=Role.user, content="What is Python?"),
+            ChatMessage(role=Role.assistant, content="A language."),
+        ]
+        await runtime.run("Tell me more", conversation_history=history)
+        call_args = provider.complete.call_args_list[0]
+        messages: list[ChatMessage] = call_args[0][0]
+        # system + 2 history + user query
+        assert len(messages) == 4
+        assert messages[1].content == "What is Python?"
+        assert messages[2].content == "A language."
+        assert messages[3].content == "Tell me more"
+
+    @pytest.mark.asyncio
+    async def test_run_without_conversation_history(self) -> None:
+        provider = _make_mock_provider(["Thought: Done\nFinal Answer: ok"])
+        runtime = AgentRuntime(
+            llm_provider=provider,
+            model="m",
+            tool_registry=ToolRegistry(),
+        )
+        result = await runtime.run("Hello")
+        assert result.answer == "ok"
+        call_args = provider.complete.call_args_list[0]
+        messages: list[ChatMessage] = call_args[0][0]
+        # system + user query only
+        assert len(messages) == 2
+
+
+# ── Streaming ────────────────────────────────────────────────
+
+
+class TestRunStreaming:
+    """run_streaming のテスト。"""
+
+    @pytest.mark.asyncio
+    async def test_streaming_yields_step_and_answer_events(self) -> None:
+        from src.agent.runtime import AgentAnswerEvent, AgentStepEvent
+
+        tool = _StubTool(result="4")
+        provider = _make_mock_provider(
+            [
+                "Thought: Calculate\nAction: calculator\nAction Input: 2+2",
+                "Thought: Got it\nFinal Answer: 4",
+            ]
+        )
+        runtime = AgentRuntime(
+            llm_provider=provider,
+            model="m",
+            tool_registry=_make_registry(tool),
+        )
+        events = []
+        async for event in runtime.run_streaming("What is 2+2?"):
+            events.append(event)
+
+        assert len(events) == 3  # tool step + final step + answer
+        assert isinstance(events[0], AgentStepEvent)
+        assert events[0].step.action == "calculator"
+        assert isinstance(events[1], AgentStepEvent)
+        assert events[1].step.thought == "Got it"
+        assert isinstance(events[2], AgentAnswerEvent)
+        assert events[2].answer == "4"
+
+    @pytest.mark.asyncio
+    async def test_streaming_direct_answer(self) -> None:
+        from src.agent.runtime import AgentAnswerEvent, AgentStepEvent
+
+        provider = _make_mock_provider(["Thought: I know\nFinal Answer: Paris"])
+        runtime = AgentRuntime(
+            llm_provider=provider,
+            model="m",
+            tool_registry=ToolRegistry(),
+        )
+        events = []
+        async for event in runtime.run_streaming("Capital of France?"):
+            events.append(event)
+
+        assert len(events) == 2  # step + answer
+        assert isinstance(events[0], AgentStepEvent)
+        assert isinstance(events[1], AgentAnswerEvent)
+        assert events[1].answer == "Paris"
+        assert events[1].stopped_by_max_steps is False
+
+    @pytest.mark.asyncio
+    async def test_streaming_max_steps(self) -> None:
+        from src.agent.runtime import AgentAnswerEvent
+
+        tool = _StubTool(result="ok")
+        responses = [f"Thought: step{i}\nAction: calculator\nAction Input: {i}" for i in range(2)]
+        provider = _make_mock_provider(responses)
+        runtime = AgentRuntime(
+            llm_provider=provider,
+            model="m",
+            tool_registry=_make_registry(tool),
+            max_steps=2,
+        )
+        events = []
+        async for event in runtime.run_streaming("q"):
+            events.append(event)
+
+        # 2 steps + 1 answer
+        assert len(events) == 3
+        answer_event = events[-1]
+        assert isinstance(answer_event, AgentAnswerEvent)
+        assert answer_event.stopped_by_max_steps is True
+
+    @pytest.mark.asyncio
+    async def test_streaming_with_conversation_history(self) -> None:
+        from src.agent.runtime import AgentAnswerEvent
+
+        provider = _make_mock_provider(["Thought: Done\nFinal Answer: yes"])
+        runtime = AgentRuntime(
+            llm_provider=provider,
+            model="m",
+            tool_registry=ToolRegistry(),
+        )
+        history = [
+            ChatMessage(role=Role.user, content="prev"),
+            ChatMessage(role=Role.assistant, content="prev answer"),
+        ]
+        events = []
+        async for event in runtime.run_streaming("new q", conversation_history=history):
+            events.append(event)
+
+        assert isinstance(events[-1], AgentAnswerEvent)
+        assert events[-1].answer == "yes"
+
+    @pytest.mark.asyncio
+    async def test_streaming_collects_sources(self) -> None:
+        from src.agent.runtime import AgentAnswerEvent
+
+        meta = {"sources": [{"id": "doc-1"}]}
+        tool = _StubTool(result="found", metadata=meta)
+        provider = _make_mock_provider(
+            [
+                "Thought: Search\nAction: calculator\nAction Input: q",
+                "Thought: Done\nFinal Answer: result",
+            ]
+        )
+        runtime = AgentRuntime(
+            llm_provider=provider,
+            model="m",
+            tool_registry=_make_registry(tool),
+        )
+        events = []
+        async for event in runtime.run_streaming("q"):
+            events.append(event)
+
+        answer = events[-1]
+        assert isinstance(answer, AgentAnswerEvent)
+        assert len(answer.sources) == 1
+        assert answer.sources[0]["id"] == "doc-1"
+
+
 # ── Metadata propagation ─────────────────────────────────────
 
 

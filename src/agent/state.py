@@ -9,6 +9,8 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from src.llm.providers.base import ChatMessage
+
 
 class AgentStep(BaseModel):
     """ReAct ループの1ステップ。
@@ -37,9 +39,15 @@ class AgentState:
     ループ制御に必要なプロパティを提供する。
     """
 
-    def __init__(self, query: str, max_steps: int = 10) -> None:
+    def __init__(
+        self,
+        query: str,
+        max_steps: int = 10,
+        conversation_history: list[ChatMessage] | None = None,
+    ) -> None:
         self._query = query
         self._max_steps = max_steps
+        self._conversation_history: list[ChatMessage] = conversation_history or []
         self._steps: list[AgentStep] = []
         self._final_answer: str | None = None
         self._is_complete: bool = False
@@ -53,6 +61,11 @@ class AgentState:
     def max_steps(self) -> int:
         """最大ステップ数。"""
         return self._max_steps
+
+    @property
+    def conversation_history(self) -> list[ChatMessage]:
+        """会話履歴のコピーを返す。"""
+        return list(self._conversation_history)
 
     @property
     def steps(self) -> list[AgentStep]:

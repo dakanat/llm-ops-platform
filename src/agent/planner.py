@@ -97,8 +97,14 @@ class ReActPlanner:
         """
         messages: list[ChatMessage] = [
             ChatMessage(role=Role.system, content=self.build_system_prompt(tools)),
-            ChatMessage(role=Role.user, content=state.query),
         ]
+
+        # 会話履歴を挿入（システムプロンプトと現在クエリの間）
+        for msg in state.conversation_history:
+            messages.append(msg)
+
+        # 現在のクエリ
+        messages.append(ChatMessage(role=Role.user, content=state.query))
 
         for step in state.steps:
             # Assistant メッセージ: Thought + Action + Action Input

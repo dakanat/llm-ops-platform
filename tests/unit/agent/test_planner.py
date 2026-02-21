@@ -170,6 +170,63 @@ class TestBuildMessages:
         assert "Observation: the result" in observation_msg.content
 
 
+# ── build_messages with conversation history ─────────────────
+
+
+class TestBuildMessagesWithConversationHistory:
+    """会話履歴付き build_messages のテスト。"""
+
+    def test_conversation_history_inserted_between_system_and_query(self) -> None:
+        from src.llm.providers.base import ChatMessage, Role
+
+        planner = ReActPlanner()
+        history = [
+            ChatMessage(role=Role.user, content="What is Python?"),
+            ChatMessage(role=Role.assistant, content="A programming language."),
+        ]
+        state = AgentState(query="Tell me more", conversation_history=history)
+        msgs = planner.build_messages(state, [])
+        assert msgs[0].role == Role.system
+        assert msgs[1].role == Role.user
+        assert msgs[1].content == "What is Python?"
+        assert msgs[2].role == Role.assistant
+        assert msgs[2].content == "A programming language."
+        assert msgs[3].role == Role.user
+        assert msgs[3].content == "Tell me more"
+
+    def test_empty_conversation_history_same_as_no_history(self) -> None:
+        planner = ReActPlanner()
+        state_no_history = AgentState(query="Hello")
+        state_empty = AgentState(query="Hello", conversation_history=[])
+        msgs_no = planner.build_messages(state_no_history, [])
+        msgs_empty = planner.build_messages(state_empty, [])
+        assert len(msgs_no) == len(msgs_empty)
+
+    def test_conversation_history_with_steps(self) -> None:
+        from src.llm.providers.base import ChatMessage, Role
+
+        planner = ReActPlanner()
+        history = [
+            ChatMessage(role=Role.user, content="prev question"),
+            ChatMessage(role=Role.assistant, content="prev answer"),
+        ]
+        state = AgentState(query="new question", conversation_history=history)
+        state.add_step(
+            AgentStep(
+                thought="search",
+                action="search",
+                action_input="query",
+                observation="result",
+            )
+        )
+        msgs = planner.build_messages(state, [_StubTool()])
+        # system + 2 history + user query + assistant step + observation
+        assert len(msgs) == 6
+        assert msgs[1].content == "prev question"
+        assert msgs[2].content == "prev answer"
+        assert msgs[3].content == "new question"
+
+
 # ── parse_response ───────────────────────────────────────────
 
 
