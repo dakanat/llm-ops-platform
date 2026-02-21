@@ -67,6 +67,17 @@ function cancelChat() {
   showSendBtn();
 }
 
+// Expand / collapse truncated table cells
+function toggleExpand(el) {
+  if (el.classList.contains("truncate")) {
+    el.classList.remove("truncate", "max-w-xs");
+    el.classList.add("whitespace-pre-wrap", "max-w-2xl");
+  } else {
+    el.classList.add("truncate", "max-w-xs");
+    el.classList.remove("whitespace-pre-wrap", "max-w-2xl");
+  }
+}
+
 // Auto-dismiss toast notifications
 document.addEventListener("htmx:afterSwap", function (event) {
   if (event.detail.target.id === "toast-container") {
