@@ -102,14 +102,10 @@ class TestEvalExampleRecordModel:
         record = EvalExampleRecord(
             dataset_id=dataset_id,
             query="What is RAG?",
-            context="RAG stands for Retrieval-Augmented Generation.",
-            answer="RAG is Retrieval-Augmented Generation.",
         )
 
         assert record.dataset_id == dataset_id
         assert record.query == "What is RAG?"
-        assert record.context == "RAG stands for Retrieval-Augmented Generation."
-        assert record.answer == "RAG is Retrieval-Augmented Generation."
 
     def test_id_defaults_to_uuid(self) -> None:
         """id がデフォルトで UUID を生成すること。"""
@@ -118,8 +114,6 @@ class TestEvalExampleRecordModel:
         record = EvalExampleRecord(
             dataset_id=uuid.uuid4(),
             query="q",
-            context="c",
-            answer="a",
         )
 
         assert record.id is not None
@@ -132,8 +126,6 @@ class TestEvalExampleRecordModel:
         record = EvalExampleRecord(
             dataset_id=uuid.uuid4(),
             query="q",
-            context="c",
-            answer="a",
         )
 
         assert record.expected_answer is None
@@ -145,8 +137,6 @@ class TestEvalExampleRecordModel:
         record = EvalExampleRecord(
             dataset_id=uuid.uuid4(),
             query="q",
-            context="c",
-            answer="a",
             expected_answer="expected",
         )
 
@@ -160,8 +150,6 @@ class TestEvalExampleRecordModel:
         record = EvalExampleRecord(
             dataset_id=uuid.uuid4(),
             query="q",
-            context="c",
-            answer="a",
         )
         after = datetime.now(UTC)
 

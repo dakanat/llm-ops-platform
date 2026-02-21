@@ -168,18 +168,16 @@ class TestParseResponse:
         provider = _make_mock_provider()
         gen = SyntheticDataGenerator(llm_provider=provider, model="test-model")
         content = '[{"question": "Q1", "answer": "A1"}]'
-        result = gen._parse_response(content, "source text")
+        result = gen._parse_response(content)
         assert len(result) == 1
         assert result[0].query == "Q1"
-        assert result[0].answer == "A1"
-        assert result[0].context == "source text"
         assert result[0].expected_answer == "A1"
 
     def test_parses_multiple_items(self) -> None:
         provider = _make_mock_provider()
         gen = SyntheticDataGenerator(llm_provider=provider, model="test-model")
         content = '[{"question": "Q1", "answer": "A1"}, {"question": "Q2", "answer": "A2"}]'
-        result = gen._parse_response(content, "source")
+        result = gen._parse_response(content)
         assert len(result) == 2
         assert result[0].query == "Q1"
         assert result[1].query == "Q2"
@@ -188,7 +186,7 @@ class TestParseResponse:
         provider = _make_mock_provider()
         gen = SyntheticDataGenerator(llm_provider=provider, model="test-model")
         content = '```json\n[{"question": "Q1", "answer": "A1"}]\n```'
-        result = gen._parse_response(content, "source")
+        result = gen._parse_response(content)
         assert len(result) == 1
         assert result[0].query == "Q1"
 
@@ -196,7 +194,7 @@ class TestParseResponse:
         provider = _make_mock_provider()
         gen = SyntheticDataGenerator(llm_provider=provider, model="test-model")
         content = '```\n[{"question": "Q1", "answer": "A1"}]\n```'
-        result = gen._parse_response(content, "source")
+        result = gen._parse_response(content)
         assert len(result) == 1
 
     def test_skips_invalid_items(self) -> None:
@@ -207,7 +205,7 @@ class TestParseResponse:
             '{"invalid": true}, '
             '{"question": "Q2", "answer": "A2"}]'
         )
-        result = gen._parse_response(content, "source")
+        result = gen._parse_response(content)
         assert len(result) == 2
         assert result[0].query == "Q1"
         assert result[1].query == "Q2"
@@ -216,7 +214,7 @@ class TestParseResponse:
         provider = _make_mock_provider()
         gen = SyntheticDataGenerator(llm_provider=provider, model="test-model")
         content = '[{"question": "", "answer": "A1"}, {"question": "Q2", "answer": "A2"}]'
-        result = gen._parse_response(content, "source")
+        result = gen._parse_response(content)
         assert len(result) == 1
         assert result[0].query == "Q2"
 
@@ -224,7 +222,7 @@ class TestParseResponse:
         provider = _make_mock_provider()
         gen = SyntheticDataGenerator(llm_provider=provider, model="test-model")
         content = '[{"question": "Q1", "answer": ""}, {"question": "Q2", "answer": "A2"}]'
-        result = gen._parse_response(content, "source")
+        result = gen._parse_response(content)
         assert len(result) == 1
         assert result[0].query == "Q2"
 
@@ -232,26 +230,26 @@ class TestParseResponse:
         provider = _make_mock_provider()
         gen = SyntheticDataGenerator(llm_provider=provider, model="test-model")
         with pytest.raises(SyntheticDataError):
-            gen._parse_response("[]", "source")
+            gen._parse_response("[]")
 
     def test_raises_on_all_invalid_items(self) -> None:
         provider = _make_mock_provider()
         gen = SyntheticDataGenerator(llm_provider=provider, model="test-model")
         content = '[{"invalid": true}, {"also": "invalid"}]'
         with pytest.raises(SyntheticDataError):
-            gen._parse_response(content, "source")
+            gen._parse_response(content)
 
     def test_raises_on_invalid_json(self) -> None:
         provider = _make_mock_provider()
         gen = SyntheticDataGenerator(llm_provider=provider, model="test-model")
         with pytest.raises(SyntheticDataError):
-            gen._parse_response("not json at all", "source")
+            gen._parse_response("not json at all")
 
     def test_raises_on_json_object_instead_of_array(self) -> None:
         provider = _make_mock_provider()
         gen = SyntheticDataGenerator(llm_provider=provider, model="test-model")
         with pytest.raises(SyntheticDataError):
-            gen._parse_response('{"question": "Q", "answer": "A"}', "source")
+            gen._parse_response('{"question": "Q", "answer": "A"}')
 
 
 # --- TestSyntheticDataGeneratorGenerate ---
@@ -285,8 +283,6 @@ class TestSyntheticDataGeneratorGenerate:
         assert len(result.examples) == 1
         ex = result.examples[0]
         assert ex.query == "Q1"
-        assert ex.answer == "A1"
-        assert ex.context == "テスト文章"
         assert ex.expected_answer == "A1"
 
     @pytest.mark.asyncio
@@ -376,16 +372,6 @@ class TestSyntheticDataGeneratorGenerateFromChunks:
         result = await gen.generate_from_chunks(["chunk1", "chunk2"])
         assert isinstance(result, EvalDataset)
         assert len(result.examples) == 2
-
-    @pytest.mark.asyncio
-    async def test_each_chunk_gets_own_context(self) -> None:
-        provider = _make_mock_provider()
-        _set_content(provider, '[{"question": "Q1", "answer": "A1"}]')
-        gen = SyntheticDataGenerator(llm_provider=provider, model="test-model")
-        result = await gen.generate_from_chunks(["chunk_a", "chunk_b"])
-        contexts = [ex.context for ex in result.examples]
-        assert "chunk_a" in contexts
-        assert "chunk_b" in contexts
 
     @pytest.mark.asyncio
     async def test_num_pairs_per_chunk(self) -> None:

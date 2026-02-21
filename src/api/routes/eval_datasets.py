@@ -51,8 +51,6 @@ class EvalExampleResponse(BaseModel):
 
     id: uuid.UUID
     query: str
-    context: str
-    answer: str
     expected_answer: str | None
     created_at: datetime
 
@@ -97,8 +95,6 @@ def _build_detail_response(
             EvalExampleResponse(
                 id=ex.id,
                 query=ex.query,
-                context=ex.context,
-                answer=ex.answer,
                 expected_answer=ex.expected_answer,
                 created_at=ex.created_at,
             )
@@ -137,8 +133,6 @@ async def create_eval_dataset(
         record = EvalExampleRecord(
             dataset_id=dataset.id,
             query=ex.query,
-            context=ex.context,
-            answer=ex.answer,
             expected_answer=ex.expected_answer,
         )
         session.add(record)
@@ -263,8 +257,6 @@ async def generate_synthetic_dataset(
         record = EvalExampleRecord(
             dataset_id=dataset.id,
             query=ex.query,
-            context=ex.context,
-            answer=ex.answer,
             expected_answer=ex.expected_answer,
         )
         session.add(record)

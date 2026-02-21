@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 from src.eval import EvalError, RegressionError
-from src.eval.datasets import EvalExample
 from src.eval.regression import (
     RegressionResult,
     RegressionThresholds,
@@ -189,10 +188,9 @@ class TestSaveBaseline:
 
     def test_roundtrip_with_example_results(self, tmp_path: Path) -> None:
         """ExampleResult を含む結果のラウンドトリップが成功すること。"""
-        example = EvalExample(query="q", context="c", answer="a")
         original = EvalRunResult(
             dataset_name="test",
-            results=[ExampleResult(example=example, faithfulness_score=0.8)],
+            results=[ExampleResult(query="q", faithfulness_score=0.8)],
             faithfulness_summary=MetricSummary(mean=0.8, count=1),
         )
         path = tmp_path / "roundtrip.json"

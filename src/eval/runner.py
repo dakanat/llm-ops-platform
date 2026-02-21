@@ -1,29 +1,39 @@
 """評価実行エンジン。
 
-データセットに対してメトリクスを一括実行し、結果をサマリとともに返す。
+データセットの各クエリを RAGPipeline に通して実際の回答・コンテキストを取得し、
+メトリクスで採点する。
 """
 
 from __future__ import annotations
+
+import time
 
 from pydantic import BaseModel
 
 from src.eval.datasets import EvalDataset, EvalExample
 from src.eval.metrics.faithfulness import FaithfulnessMetric
 from src.eval.metrics.relevance import RelevanceMetric
+from src.rag.pipeline import RAGPipeline
 
 
 class ExampleResult(BaseModel):
     """1件の評価結果。
 
     Attributes:
-        example: 評価対象のサンプル。
+        query: ユーザーの質問。
+        expected_answer: 期待される回答 (オプション)。
+        rag_answer: RAG パイプラインが生成した回答。
+        rag_context: RAG パイプラインが取得したコンテキスト。
         faithfulness_score: 忠実性スコア (未評価時は None)。
         relevance_score: 関連性スコア (未評価時は None)。
         latency_seconds: レイテンシ秒数 (未計測時は None)。
         error: エラーメッセージ (正常時は None)。
     """
 
-    example: EvalExample
+    query: str
+    expected_answer: str | None = None
+    rag_answer: str | None = None
+    rag_context: str | None = None
     faithfulness_score: float | None = None
     relevance_score: float | None = None
     latency_seconds: float | None = None
@@ -63,27 +73,23 @@ class EvalRunResult(BaseModel):
 class EvalRunner:
     """評価実行エンジン。
 
-    メトリクスをコンストラクタ注入し、データセットに対して一括評価を実行する。
+    RAGPipeline とメトリクスをコンストラクタ注入し、データセットに対して一括評価を実行する。
+    各クエリを pipeline.query() に通して実際の回答・コンテキストを取得し、メトリクスで採点する。
     1件のエラーで全体が止まらないよう、エラーは ExampleResult.error に記録して続行する。
     """
 
     def __init__(
         self,
+        pipeline: RAGPipeline,
         faithfulness_metric: FaithfulnessMetric | None = None,
         relevance_metric: RelevanceMetric | None = None,
     ) -> None:
+        self._pipeline = pipeline
         self._faithfulness_metric = faithfulness_metric
         self._relevance_metric = relevance_metric
 
     async def run(self, dataset: EvalDataset) -> EvalRunResult:
-        """データセットに対して評価を実行する。
-
-        Args:
-            dataset: 評価対象のデータセット。
-
-        Returns:
-            全サンプルの評価結果とサマリを含む EvalRunResult。
-        """
+        """データセットに対して評価を実行する。"""
         results: list[ExampleResult] = []
         for example in dataset.examples:
             result = await self._evaluate_example(example)
@@ -93,56 +99,74 @@ class EvalRunner:
             r.faithfulness_score for r in results if r.faithfulness_score is not None
         ]
         relevance_scores = [r.relevance_score for r in results if r.relevance_score is not None]
+        latency_values = [r.latency_seconds for r in results if r.latency_seconds is not None]
 
         return EvalRunResult(
             dataset_name=dataset.name,
             results=results,
             faithfulness_summary=self._compute_summary(faithfulness_scores),
             relevance_summary=self._compute_summary(relevance_scores),
+            latency_summary=self._compute_summary(latency_values),
         )
 
     async def _evaluate_example(self, example: EvalExample) -> ExampleResult:
-        """1件のサンプルを評価する。
-
-        Args:
-            example: 評価対象のサンプル。
-
-        Returns:
-            評価結果。エラー時は error フィールドにメッセージを記録。
-        """
+        """1件のサンプルを評価する。"""
+        rag_answer: str | None = None
+        rag_context: str | None = None
+        latency_seconds: float | None = None
         faithfulness_score: float | None = None
         relevance_score: float | None = None
 
+        # RAG pipeline 呼び出し
+        try:
+            start = time.perf_counter()
+            gen_result = await self._pipeline.query(example.query)
+            latency_seconds = time.perf_counter() - start
+
+            rag_answer = gen_result.answer
+            rag_context = "\n\n".join(s.content for s in gen_result.sources)
+        except Exception as e:
+            return ExampleResult(
+                query=example.query,
+                expected_answer=example.expected_answer,
+                error=str(e),
+            )
+
+        # メトリクス採点
         try:
             if self._faithfulness_metric is not None:
                 faith_result = await self._faithfulness_metric.evaluate(
-                    context=example.context, answer=example.answer
+                    context=rag_context, answer=rag_answer
                 )
                 faithfulness_score = faith_result.score
 
             if self._relevance_metric is not None:
                 rel_result = await self._relevance_metric.evaluate(
-                    query=example.query, answer=example.answer
+                    query=example.query, answer=rag_answer
                 )
                 relevance_score = rel_result.score
         except Exception as e:
-            return ExampleResult(example=example, error=str(e))
+            return ExampleResult(
+                query=example.query,
+                expected_answer=example.expected_answer,
+                rag_answer=rag_answer,
+                rag_context=rag_context,
+                latency_seconds=latency_seconds,
+                error=str(e),
+            )
 
         return ExampleResult(
-            example=example,
+            query=example.query,
+            expected_answer=example.expected_answer,
+            rag_answer=rag_answer,
+            rag_context=rag_context,
             faithfulness_score=faithfulness_score,
             relevance_score=relevance_score,
+            latency_seconds=latency_seconds,
         )
 
     def _compute_summary(self, scores: list[float]) -> MetricSummary | None:
-        """スコアリストからサマリを計算する。
-
-        Args:
-            scores: スコアのリスト。
-
-        Returns:
-            平均値とカウントを含む MetricSummary。空リストの場合は None。
-        """
+        """スコアリストからサマリを計算する。"""
         if not scores:
             return None
         return MetricSummary(mean=sum(scores) / len(scores), count=len(scores))

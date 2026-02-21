@@ -8,7 +8,6 @@ from fastapi import FastAPI
 from httpx import AsyncClient
 from src.api.middleware.auth import TokenPayload
 from src.eval import EvalError
-from src.eval.datasets import EvalExample
 from src.eval.runner import EvalRunResult, ExampleResult, MetricSummary
 
 
@@ -18,17 +17,14 @@ def _make_eval_run_result(
     relevance_summary: MetricSummary | None = None,
 ) -> EvalRunResult:
     """Create a test EvalRunResult."""
-    example = EvalExample(
-        query="What is RAG?",
-        context="RAG stands for Retrieval-Augmented Generation.",
-        answer="RAG is Retrieval-Augmented Generation.",
-        expected_answer="Retrieval-Augmented Generation",
-    )
     return EvalRunResult(
         dataset_name=dataset_name,
         results=[
             ExampleResult(
-                example=example,
+                query="What is RAG?",
+                expected_answer="Retrieval-Augmented Generation",
+                rag_answer="RAG is Retrieval-Augmented Generation.",
+                rag_context="RAG stands for Retrieval-Augmented Generation.",
                 faithfulness_score=0.9,
                 relevance_score=0.85,
                 latency_seconds=0.5,
@@ -65,8 +61,6 @@ def _override_dependencies(
 _VALID_EXAMPLES = [
     {
         "query": "What is RAG?",
-        "context": "RAG stands for Retrieval-Augmented Generation.",
-        "answer": "RAG is Retrieval-Augmented Generation.",
         "expected_answer": "Retrieval-Augmented Generation",
     },
 ]
@@ -261,8 +255,6 @@ class TestEvalRunWithDatasetId:
         example = EvalExampleRecord(
             dataset_id=ds_id,
             query="What is RAG?",
-            context="RAG stands for Retrieval-Augmented Generation.",
-            answer="RAG is Retrieval-Augmented Generation.",
             expected_answer="Retrieval-Augmented Generation",
         )
 
@@ -298,8 +290,6 @@ class TestEvalRunWithDatasetId:
         example = EvalExampleRecord(
             dataset_id=ds_id,
             query="What is RAG?",
-            context="RAG stands for Retrieval-Augmented Generation.",
-            answer="RAG is Retrieval-Augmented Generation.",
             expected_answer="Retrieval-Augmented Generation",
         )
 

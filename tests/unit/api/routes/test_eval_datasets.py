@@ -16,8 +16,6 @@ _USER_UUID = str(uuid.UUID("00000000-0000-0000-0000-000000000001"))
 _VALID_EXAMPLES = [
     {
         "query": "What is RAG?",
-        "context": "RAG stands for Retrieval-Augmented Generation.",
-        "answer": "RAG is Retrieval-Augmented Generation.",
         "expected_answer": "Retrieval-Augmented Generation",
     },
 ]
@@ -287,8 +285,6 @@ class TestGetEvalDataset:
         example = EvalExampleRecord(
             dataset_id=ds_id,
             query="What is RAG?",
-            context="RAG stands for Retrieval-Augmented Generation.",
-            answer="RAG is Retrieval-Augmented Generation.",
         )
 
         session = _make_session()
@@ -383,8 +379,6 @@ class TestGenerateSyntheticDataset:
             examples=[
                 EvalExample(
                     query="Q1",
-                    context="source text",
-                    answer="A1",
                     expected_answer="A1",
                 ),
             ],
@@ -409,8 +403,6 @@ class TestGenerateSyntheticDataset:
             examples=[
                 EvalExample(
                     query="Q1",
-                    context="source text",
-                    answer="A1",
                     expected_answer="A1",
                 ),
             ],
@@ -436,7 +428,7 @@ class TestGenerateSyntheticDataset:
         generator.generate.return_value = EvalDataset(
             name="synthetic",
             examples=[
-                EvalExample(query="Q1", context="c", answer="A1", expected_answer="A1"),
+                EvalExample(query="Q1", expected_answer="A1"),
             ],
         )
         session = _make_session()
@@ -477,7 +469,7 @@ class TestGenerateSyntheticDataset:
         generator.generate.return_value = EvalDataset(
             name="synthetic",
             examples=[
-                EvalExample(query="Q1", context="c", answer="A1", expected_answer="A1"),
+                EvalExample(query="Q1", expected_answer="A1"),
             ],
         )
         session = _make_session()

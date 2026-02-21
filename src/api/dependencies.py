@@ -131,11 +131,21 @@ async def get_tool_registry(
     yield registry
 
 
-def get_eval_runner() -> EvalRunner:
-    """Return an EvalRunner (no metrics by default — they require LLM)."""
+async def get_eval_runner(
+    pipeline: Annotated[RAGPipeline, Depends(get_rag_pipeline)],
+    provider: Annotated[LLMProvider, Depends(get_llm_provider)],
+    model: Annotated[str, Depends(get_llm_model)],
+) -> AsyncGenerator[EvalRunner, None]:
+    """Return an EvalRunner with RAGPipeline and metrics."""
+    from src.eval.metrics.faithfulness import FaithfulnessMetric
+    from src.eval.metrics.relevance import RelevanceMetric
     from src.eval.runner import EvalRunner as _EvalRunner
 
-    return _EvalRunner()
+    yield _EvalRunner(
+        pipeline=pipeline,
+        faithfulness_metric=FaithfulnessMetric(llm_provider=provider, model=model),
+        relevance_metric=RelevanceMetric(llm_provider=provider, model=model),
+    )
 
 
 def get_synthetic_data_generator(

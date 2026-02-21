@@ -171,8 +171,6 @@ class EvalExampleRecord(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     dataset_id: uuid.UUID = Field(foreign_key="eval_datasets.id")
     query: str = Field(sa_column=Column(Text, nullable=False))
-    context: str = Field(sa_column=Column(Text, nullable=False))
-    answer: str = Field(sa_column=Column(Text, nullable=False))
     expected_answer: str | None = Field(default=None, sa_column=Column(Text))
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),

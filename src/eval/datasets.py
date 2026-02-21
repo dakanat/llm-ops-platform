@@ -1,6 +1,6 @@
 """評価データセット管理。
 
-評価用のクエリ・コンテキスト・回答セットを JSON ファイルとして読み書きする。
+評価用のクエリ・期待回答セットを JSON ファイルとして読み書きする。
 """
 
 from __future__ import annotations
@@ -18,14 +18,10 @@ class EvalExample(BaseModel):
 
     Attributes:
         query: ユーザーの質問。
-        context: 検索で取得されたコンテキスト。
-        answer: LLM が生成した回答。
         expected_answer: 期待される回答 (オプション)。
     """
 
     query: str
-    context: str
-    answer: str
     expected_answer: str | None = None
 
 

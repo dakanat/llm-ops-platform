@@ -25,8 +25,6 @@ class EvalExampleInput(BaseModel):
     """評価サンプル入力。"""
 
     query: str
-    context: str
-    answer: str
     expected_answer: str | None = None
 
 
@@ -34,9 +32,9 @@ class ExampleResultResponse(BaseModel):
     """1件の評価結果レスポンス。"""
 
     query: str
-    context: str
-    answer: str
     expected_answer: str | None = None
+    rag_answer: str | None = None
+    rag_context: str | None = None
     faithfulness_score: float | None = None
     relevance_score: float | None = None
     latency_seconds: float | None = None
@@ -82,10 +80,10 @@ def _map_eval_result(result: EvalRunResult) -> EvalRunResponse:
         dataset_name=result.dataset_name,
         results=[
             ExampleResultResponse(
-                query=r.example.query,
-                context=r.example.context,
-                answer=r.example.answer,
-                expected_answer=r.example.expected_answer,
+                query=r.query,
+                expected_answer=r.expected_answer,
+                rag_answer=r.rag_answer,
+                rag_context=r.rag_context,
                 faithfulness_score=r.faithfulness_score,
                 relevance_score=r.relevance_score,
                 latency_seconds=r.latency_seconds,
@@ -144,8 +142,6 @@ async def eval_run(
         examples = [
             EvalExample(
                 query=r.query,
-                context=r.context,
-                answer=r.answer,
                 expected_answer=r.expected_answer,
             )
             for r in records
@@ -154,8 +150,6 @@ async def eval_run(
         examples = [
             EvalExample(
                 query=ex.query,
-                context=ex.context,
-                answer=ex.answer,
                 expected_answer=ex.expected_answer,
             )
             for ex in request.examples  # type: ignore[union-attr]

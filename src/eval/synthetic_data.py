@@ -98,7 +98,7 @@ class SyntheticDataGenerator:
         except Exception as e:
             raise SyntheticDataError(f"LLM 呼び出しに失敗しました: {e}") from e
 
-        examples = self._parse_response(response.content, text)
+        examples = self._parse_response(response.content)
         return EvalDataset(name="synthetic", examples=examples)
 
     async def generate_from_chunks(
@@ -151,23 +151,12 @@ class SyntheticDataGenerator:
             ),
         ]
 
-    def _parse_response(self, content: str, source_text: str) -> list[EvalExample]:
+    def _parse_response(self, content: str) -> list[EvalExample]:
         """LLM レスポンスから EvalExample のリストをパースする。
 
         マークダウンコードフェンスを除去し、JSON 配列をパースする。
         不正なアイテムはスキップし、有効なもののみ返す。
-
-        Args:
-            content: LLM レスポンスの文字列。
-            source_text: 生成元テキスト (context に設定)。
-
-        Returns:
-            パースされた EvalExample のリスト。
-
-        Raises:
-            SyntheticDataError: JSON パース失敗、配列でない、または有効なアイテムがない場合。
         """
-        # マークダウンコードフェンスを除去
         cleaned = re.sub(r"^```(?:json)?\s*\n?", "", content.strip())
         cleaned = re.sub(r"\n?```\s*$", "", cleaned)
 
@@ -190,8 +179,6 @@ class SyntheticDataGenerator:
             examples.append(
                 EvalExample(
                     query=question,
-                    context=source_text,
-                    answer=answer,
                     expected_answer=answer,
                 )
             )
