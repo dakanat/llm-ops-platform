@@ -2,7 +2,7 @@
   <div class="card-body">
     <div class="flex justify-between items-center">
       <span class="badge badge-outline">Chunk #{{ source.chunk_index }}</span>
-      <span class="text-xs opacity-50">{{ source.document_id }}</span>
+      <a href="/web/rag/documents/{{ source.document_id }}" class="link link-hover text-xs opacity-50">{{ source.document_id }}</a>
     </div>
     <p class="text-sm whitespace-pre-wrap">{{ source.content }}</p>
   </div>

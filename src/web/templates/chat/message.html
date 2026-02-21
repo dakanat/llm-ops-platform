@@ -5,3 +5,62 @@
   <div class="chat-bubble">{{ assistant_message }}</div>
   <div class="chat-footer opacity-50 text-xs">{{ model }}</div>
 </div>
+
+{% if stopped_by_max_steps is defined and stopped_by_max_steps %}
+<div class="alert alert-warning mt-2">
+  <span>Agent reached maximum steps ({{ total_steps }})</span>
+</div>
+{% endif %}
+
+{% if steps is defined and steps %}
+{% set tool_steps = steps | selectattr("action") | list %}
+{% if tool_steps %}
+<div class="mt-2">
+  <div class="collapse collapse-arrow bg-base-200">
+    <input type="checkbox" />
+    <div class="collapse-title font-medium text-sm">
+      Steps ({{ total_steps }})
+    </div>
+    <div class="collapse-content space-y-2">
+      {% for step in steps %}
+      <div class="{% if step.is_error %}border border-error rounded-lg p-2{% endif %}">
+        <div class="text-sm">
+          {% if step.action %}
+          <span class="badge badge-primary badge-sm">{{ step.action }}</span>
+          {% else %}
+          <span class="badge badge-ghost badge-sm">Thinking</span>
+          {% endif %}
+        </div>
+        <p class="text-xs opacity-70 mt-1">{{ step.thought }}</p>
+        {% if step.action %}
+        <div class="text-xs mt-1">
+          <code>{{ step.action }}({{ step.action_input }})</code>
+        </div>
+        {% endif %}
+        {% if step.observation %}
+        <p class="text-xs whitespace-pre-wrap mt-1 {% if step.is_error %}text-error{% endif %}">{{ step.observation }}</p>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endif %}
+
+{% if sources is defined and sources %}
+<div class="mt-2 space-y-2">
+  <h4 class="text-sm font-semibold">Sources</h4>
+  {% for source in sources %}
+  <div class="card card-compact bg-base-200">
+    <div class="card-body">
+      <div class="flex justify-between items-center">
+        <span class="badge badge-outline badge-sm">Chunk #{{ source.chunk_index }}</span>
+        <a href="/web/rag/documents/{{ source.document_id }}" class="link link-hover text-xs opacity-50">{{ source.document_id }}</a>
+      </div>
+      <p class="text-xs whitespace-pre-wrap">{{ source.content }}</p>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}

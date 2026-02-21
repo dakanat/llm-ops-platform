@@ -1,4 +1,4 @@
-"""Tests for web chat routes."""
+"""Tests for web chat routes (Agent-integrated)."""
 
 from __future__ import annotations
 
@@ -9,8 +9,9 @@ import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from src.agent.runtime import AgentResult
+from src.agent.state import AgentStep
 from src.config import Settings
-from src.llm.providers.base import LLMChunk, LLMResponse, TokenUsage
 from src.main import create_app
 
 from tests.unit.web.conftest import AuthCookies
@@ -67,33 +68,47 @@ class TestChatPage:
 
 
 class TestChatSend:
-    """Tests for POST /web/chat/send."""
+    """Tests for POST /web/chat/send (Agent-integrated)."""
 
-    async def test_send_returns_message_fragment(
+    async def test_send_returns_agent_response(
         self, test_app: FastAPI, client: AsyncClient, admin_token: str
     ) -> None:
-        mock_provider = AsyncMock()
-        mock_provider.complete.return_value = LLMResponse(
-            content="Hello from the LLM!",
-            model="test-model",
-            usage=TokenUsage(prompt_tokens=10, completion_tokens=5, total_tokens=15),
+        mock_runtime = AsyncMock()
+        mock_runtime.run.return_value = AgentResult(
+            answer="Hello from the Agent!",
+            steps=[AgentStep(thought="I know the answer.")],
+            total_steps=1,
+            stopped_by_max_steps=False,
         )
 
-        from src.api.dependencies import get_llm_model, get_llm_provider
+        from src.agent.tools.registry import ToolRegistry
+        from src.api.dependencies import get_llm_model, get_llm_provider, get_tool_registry
 
-        test_app.dependency_overrides[get_llm_provider] = lambda: mock_provider
+        test_app.dependency_overrides[get_llm_provider] = lambda: AsyncMock()
         test_app.dependency_overrides[get_llm_model] = lambda: "test-model"
+        test_app.dependency_overrides[get_tool_registry] = lambda: ToolRegistry()
 
-        with AuthCookies(client, admin_token):
-            resp = await client.post(
-                "/web/chat/send",
-                data={"message": "Hello"},
-            )
-        assert resp.status_code == 200
-        assert "text/html" in resp.headers["content-type"]
-        assert "Hello from the LLM!" in resp.text
+        import src.web.routes.chat as chat_module
 
-        test_app.dependency_overrides.clear()
+        original_create = chat_module._create_runtime
+
+        def _mock_create(*args: object, **kwargs: object) -> AsyncMock:
+            return mock_runtime
+
+        chat_module._create_runtime = _mock_create
+
+        try:
+            with AuthCookies(client, admin_token):
+                resp = await client.post(
+                    "/web/chat/send",
+                    data={"message": "Hello"},
+                )
+            assert resp.status_code == 200
+            assert "text/html" in resp.headers["content-type"]
+            assert "Hello from the Agent!" in resp.text
+        finally:
+            chat_module._create_runtime = original_create
+            test_app.dependency_overrides.clear()
 
     async def test_send_empty_message_returns_error(
         self, client: AsyncClient, admin_token: str
@@ -107,34 +122,144 @@ class TestChatSend:
         body = resp.text
         assert "alert" in body.lower() or "error" in body.lower()
 
-
-class TestChatStream:
-    """Tests for POST /web/chat/stream (SSE)."""
-
-    async def test_stream_returns_sse_response(
+    async def test_send_with_tool_steps(
         self, test_app: FastAPI, client: AsyncClient, admin_token: str
     ) -> None:
-        async def mock_stream(**kwargs: object) -> AsyncGenerator[LLMChunk, None]:
-            yield LLMChunk(content="Hello", finish_reason=None)
-            yield LLMChunk(content=" world", finish_reason="stop")
+        mock_runtime = AsyncMock()
+        mock_runtime.run.return_value = AgentResult(
+            answer="The answer is 42.",
+            steps=[
+                AgentStep(
+                    thought="I need to calculate this.",
+                    action="calculator",
+                    action_input="6 * 7",
+                    observation="42",
+                ),
+                AgentStep(thought="Now I know the answer."),
+            ],
+            total_steps=2,
+            stopped_by_max_steps=False,
+        )
 
-        mock_provider = AsyncMock()
-        mock_provider.stream = mock_stream
+        from src.agent.tools.registry import ToolRegistry
+        from src.api.dependencies import get_llm_model, get_llm_provider, get_tool_registry
 
-        from src.api.dependencies import get_llm_model, get_llm_provider
-
-        test_app.dependency_overrides[get_llm_provider] = lambda: mock_provider
+        test_app.dependency_overrides[get_llm_provider] = lambda: AsyncMock()
         test_app.dependency_overrides[get_llm_model] = lambda: "test-model"
+        test_app.dependency_overrides[get_tool_registry] = lambda: ToolRegistry()
 
-        with AuthCookies(client, admin_token):
-            resp = await client.post(
-                "/web/chat/stream",
-                data={"message": "Hello"},
-            )
-        assert resp.status_code == 200
-        assert "text/event-stream" in resp.headers["content-type"]
-        body = resp.text
-        assert "Hello" in body
-        assert "world" in body
+        import src.web.routes.chat as chat_module
 
-        test_app.dependency_overrides.clear()
+        original_create = chat_module._create_runtime
+
+        def _mock_create(*args: object, **kwargs: object) -> AsyncMock:
+            return mock_runtime
+
+        chat_module._create_runtime = _mock_create
+
+        try:
+            with AuthCookies(client, admin_token):
+                resp = await client.post(
+                    "/web/chat/send",
+                    data={"message": "What is 6 * 7?"},
+                )
+            assert resp.status_code == 200
+            assert "42" in resp.text
+            assert "calculator" in resp.text
+        finally:
+            chat_module._create_runtime = original_create
+            test_app.dependency_overrides.clear()
+
+    async def test_send_with_rag_sources(
+        self, test_app: FastAPI, client: AsyncClient, admin_token: str
+    ) -> None:
+        mock_runtime = AsyncMock()
+        mock_runtime.run.return_value = AgentResult(
+            answer="Paris is the capital.",
+            steps=[
+                AgentStep(
+                    thought="Searching for information.",
+                    action="search",
+                    action_input="capital of France",
+                    observation="Paris is the capital of France.",
+                    metadata={
+                        "sources": [
+                            {
+                                "document_id": "doc-123",
+                                "chunk_index": 0,
+                                "content": "France's capital is Paris.",
+                            }
+                        ]
+                    },
+                ),
+                AgentStep(thought="I have the answer."),
+            ],
+            total_steps=2,
+            stopped_by_max_steps=False,
+        )
+
+        from src.agent.tools.registry import ToolRegistry
+        from src.api.dependencies import get_llm_model, get_llm_provider, get_tool_registry
+
+        test_app.dependency_overrides[get_llm_provider] = lambda: AsyncMock()
+        test_app.dependency_overrides[get_llm_model] = lambda: "test-model"
+        test_app.dependency_overrides[get_tool_registry] = lambda: ToolRegistry()
+
+        import src.web.routes.chat as chat_module
+
+        original_create = chat_module._create_runtime
+
+        def _mock_create(*args: object, **kwargs: object) -> AsyncMock:
+            return mock_runtime
+
+        chat_module._create_runtime = _mock_create
+
+        try:
+            with AuthCookies(client, admin_token):
+                resp = await client.post(
+                    "/web/chat/send",
+                    data={"message": "What is the capital of France?"},
+                )
+            assert resp.status_code == 200
+            assert "Paris is the capital." in resp.text
+            assert "doc-123" in resp.text
+        finally:
+            chat_module._create_runtime = original_create
+            test_app.dependency_overrides.clear()
+
+    async def test_agent_error_returns_error_toast(
+        self, test_app: FastAPI, client: AsyncClient, admin_token: str
+    ) -> None:
+        from src.agent import AgentError
+
+        mock_runtime = AsyncMock()
+        mock_runtime.run.side_effect = AgentError("LLM call failed")
+
+        from src.agent.tools.registry import ToolRegistry
+        from src.api.dependencies import get_llm_model, get_llm_provider, get_tool_registry
+
+        test_app.dependency_overrides[get_llm_provider] = lambda: AsyncMock()
+        test_app.dependency_overrides[get_llm_model] = lambda: "test-model"
+        test_app.dependency_overrides[get_tool_registry] = lambda: ToolRegistry()
+
+        import src.web.routes.chat as chat_module
+
+        original_create = chat_module._create_runtime
+
+        def _mock_create(*args: object, **kwargs: object) -> AsyncMock:
+            return mock_runtime
+
+        chat_module._create_runtime = _mock_create
+
+        try:
+            with AuthCookies(client, admin_token):
+                resp = await client.post(
+                    "/web/chat/send",
+                    data={"message": "Hello"},
+                )
+            assert resp.status_code == 200
+            body = resp.text
+            assert "error" in body.lower() or "alert" in body.lower()
+        finally:
+            chat_module._create_runtime = original_create
+            test_app.dependency_overrides.clear()
