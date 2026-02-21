@@ -34,6 +34,8 @@
           <thead>
             <tr>
               <th>Query</th>
+              <th>RAG Answer</th>
+              <th>Expected</th>
               <th>Faithfulness</th>
               <th>Relevance</th>
               <th>Latency</th>
@@ -43,7 +45,9 @@
           <tbody>
             {% for r in result.results %}
             <tr>
-              <td class="max-w-xs truncate">{{ r.example.query }}</td>
+              <td class="max-w-xs truncate cursor-pointer hover:bg-base-200" onclick="toggleExpand(this)">{{ r.query }}</td>
+              <td class="max-w-xs truncate cursor-pointer hover:bg-base-200" onclick="toggleExpand(this)">{{ r.rag_answer or "-" }}</td>
+              <td class="max-w-xs truncate cursor-pointer hover:bg-base-200" onclick="toggleExpand(this)">{{ r.expected_answer or "-" }}</td>
               <td>{{ "%.2f"|format(r.faithfulness_score) if r.faithfulness_score is not none else "-" }}</td>
               <td>{{ "%.2f"|format(r.relevance_score) if r.relevance_score is not none else "-" }}</td>
               <td>{{ "%.2f"|format(r.latency_seconds) if r.latency_seconds is not none else "-" }}s</td>

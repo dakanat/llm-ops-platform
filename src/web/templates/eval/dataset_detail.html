@@ -20,19 +20,15 @@
         <tr>
           <th>#</th>
           <th>Query</th>
-          <th>Context</th>
-          <th>Answer</th>
-          <th>Expected</th>
+          <th>Expected Answer</th>
         </tr>
       </thead>
       <tbody>
         {% for ex in examples %}
         <tr>
           <td>{{ loop.index }}</td>
-          <td class="max-w-xs truncate">{{ ex.query }}</td>
-          <td class="max-w-xs truncate">{{ ex.context }}</td>
-          <td class="max-w-xs truncate">{{ ex.answer }}</td>
-          <td class="max-w-xs truncate">{{ ex.expected_answer or "-" }}</td>
+          <td class="max-w-xs truncate cursor-pointer hover:bg-base-200" onclick="toggleExpand(this)">{{ ex.query }}</td>
+          <td class="max-w-xs truncate cursor-pointer hover:bg-base-200" onclick="toggleExpand(this)">{{ ex.expected_answer or "-" }}</td>
         </tr>
         {% endfor %}
       </tbody>

@@ -13,6 +13,7 @@
   <div class="card bg-base-100 shadow">
     <div class="card-body">
       <h2 class="card-title">Run Evaluation</h2>
+      {% if datasets %}
       <form
         hx-post="/web/eval/run"
         hx-target="#eval-result"
@@ -21,26 +22,25 @@
         class="space-y-4"
       >
         <div class="form-control">
-          <label class="label" for="dataset_name">
-            <span class="label-text">Dataset Name</span>
+          <label class="label" for="dataset_id">
+            <span class="label-text">Dataset</span>
           </label>
-          <input type="text" id="dataset_name" name="dataset_name" class="input input-bordered" required />
-        </div>
-        <div class="form-control">
-          <label class="label" for="examples">
-            <span class="label-text">Examples (JSON array)</span>
-          </label>
-          <textarea
-            id="examples"
-            name="examples"
-            rows="6"
-            class="textarea textarea-bordered font-mono text-sm"
-            placeholder='[{"query":"...","context":"...","answer":"..."}]'
-            required
-          ></textarea>
+          <select id="dataset_id" name="dataset_id" class="select select-bordered" required>
+            <option value="" disabled selected>Select a dataset</option>
+            {% for item in datasets %}
+            <option value="{{ item.dataset.id }}">{{ item.dataset.name }} ({{ item.example_count }} examples)</option>
+            {% endfor %}
+          </select>
         </div>
         <button type="submit" class="btn btn-primary">Run Evaluation</button>
       </form>
+      {% else %}
+      <p class="text-base-content/60">
+        No datasets available.
+        <a href="/web/eval/datasets/create" class="link link-primary">Create a dataset</a>
+        to get started.
+      </p>
+      {% endif %}
     </div>
   </div>
 

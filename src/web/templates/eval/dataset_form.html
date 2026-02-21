@@ -9,37 +9,112 @@
     <a href="/web/eval/datasets" class="btn btn-outline btn-sm">Back to List</a>
   </div>
 
-  <div class="card bg-base-100 shadow">
-    <div class="card-body">
-      <form action="/api/eval/datasets" method="post" class="space-y-4">
-        <div class="form-control">
-          <label class="label" for="name">
-            <span class="label-text">Name</span>
-          </label>
-          <input type="text" id="name" name="name" class="input input-bordered" required />
+  <div>
+    <div role="tablist" class="tabs tabs-bordered mb-4">
+      <a role="tab" class="tab tab-active" data-tab="manual" onclick="switchTab('manual')">Manual</a>
+      <a role="tab" class="tab" data-tab="generate" onclick="switchTab('generate')">Generate</a>
+    </div>
+
+    <!-- Manual Tab -->
+    <div data-tab-panel="manual">
+      <div class="card bg-base-100 shadow">
+        <div class="card-body">
+          <form action="/api/eval/datasets" method="post" class="space-y-4">
+            <div class="form-control">
+              <label class="label" for="manual-name">
+                <span class="label-text">Name</span>
+              </label>
+              <input type="text" id="manual-name" name="name" class="input input-bordered" required />
+            </div>
+            <div class="form-control">
+              <label class="label" for="manual-description">
+                <span class="label-text">Description</span>
+              </label>
+              <textarea id="manual-description" name="description" rows="3" class="textarea textarea-bordered"></textarea>
+            </div>
+            <div class="form-control">
+              <label class="label" for="examples">
+                <span class="label-text">Examples (JSON array)</span>
+              </label>
+              <textarea
+                id="examples"
+                name="examples"
+                rows="8"
+                class="textarea textarea-bordered font-mono text-sm"
+                placeholder='[{"query":"...","expected_answer":"..."}]'
+                required
+              ></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary">Create Dataset</button>
+          </form>
         </div>
-        <div class="form-control">
-          <label class="label" for="description">
-            <span class="label-text">Description</span>
-          </label>
-          <textarea id="description" name="description" rows="3" class="textarea textarea-bordered"></textarea>
+      </div>
+    </div>
+
+    <!-- Generate Tab -->
+    <div data-tab-panel="generate" class="hidden">
+      <div class="card bg-base-100 shadow">
+        <div class="card-body">
+          <form
+            hx-post="/web/eval/datasets/generate"
+            hx-target="#toast-container"
+            hx-swap="innerHTML"
+            hx-indicator="#generate-loading"
+            hx-disabled-elt="find button[type='submit']"
+            class="space-y-4"
+          >
+            <div class="form-control">
+              <label class="label" for="gen-name">
+                <span class="label-text">Name</span>
+              </label>
+              <input type="text" id="gen-name" name="name" class="input input-bordered" required />
+            </div>
+            <div class="form-control">
+              <label class="label" for="gen-description">
+                <span class="label-text">Description</span>
+              </label>
+              <textarea id="gen-description" name="description" rows="2" class="textarea textarea-bordered"></textarea>
+            </div>
+            <div class="form-control">
+              <label class="label" for="gen-text">
+                <span class="label-text">Source Text</span>
+              </label>
+              <textarea
+                id="gen-text"
+                name="text"
+                rows="8"
+                class="textarea textarea-bordered"
+                placeholder="Paste the source text from which QA pairs will be generated..."
+                required
+              ></textarea>
+            </div>
+            <div class="form-control">
+              <label class="label" for="gen-num-pairs">
+                <span class="label-text">Number of QA pairs (1-50)</span>
+              </label>
+              <input type="number" id="gen-num-pairs" name="num_pairs" class="input input-bordered w-32" value="5" min="1" max="50" />
+            </div>
+            <div class="flex items-center gap-3">
+              <button type="submit" class="btn btn-primary">Generate Dataset</button>
+              <span id="generate-loading" class="loading loading-spinner loading-md htmx-indicator"></span>
+            </div>
+          </form>
         </div>
-        <div class="form-control">
-          <label class="label" for="examples">
-            <span class="label-text">Examples (JSON array)</span>
-          </label>
-          <textarea
-            id="examples"
-            name="examples"
-            rows="8"
-            class="textarea textarea-bordered font-mono text-sm"
-            placeholder='[{"query":"...","context":"...","answer":"...","expected_answer":"..."}]'
-            required
-          ></textarea>
-        </div>
-        <button type="submit" class="btn btn-primary">Create Dataset</button>
-      </form>
+      </div>
     </div>
   </div>
+
+  <div id="toast-container"></div>
 </div>
+
+<script>
+function switchTab(name) {
+  document.querySelectorAll('[data-tab-panel]').forEach(function(el) {
+    el.classList.toggle('hidden', el.dataset.tabPanel !== name);
+  });
+  document.querySelectorAll('[data-tab]').forEach(function(el) {
+    el.classList.toggle('tab-active', el.dataset.tab === name);
+  });
+}
+</script>
 {% endblock %}
