@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}Register Document - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="flex flex-col gap-4">
+  <div class="flex justify-between items-center">
+    <h1 class="text-2xl font-bold">Register Document</h1>
+    <a href="/web/rag/documents" class="btn btn-outline btn-sm">Back to List</a>
+  </div>
+
+  {% if error_message is defined and error_message %}
+  <div class="alert alert-error">
+    <span>{{ error_message }}</span>
+  </div>
+  {% endif %}
+
+  <div class="card bg-base-100 shadow">
+    <div class="card-body">
+      <form
+        action="/web/rag/documents"
+        method="post"
+        class="space-y-4"
+      >
+        <div class="form-control">
+          <label class="label" for="title">
+            <span class="label-text">Title</span>
+          </label>
+          <input
+            type="text"
+            id="title"
+            name="title"
+            class="input input-bordered"
+            value="{{ form_title if form_title is defined else '' }}"
+            required
+          />
+        </div>
+        <div class="form-control">
+          <label class="label" for="content">
+            <span class="label-text">Content</span>
+          </label>
+          <textarea
+            id="content"
+            name="content"
+            rows="12"
+            class="textarea textarea-bordered"
+            required
+          >{{ form_content if form_content is defined else '' }}</textarea>
+        </div>
+        <div class="alert alert-info">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="h-6 w-6 shrink-0 stroke-current"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          <span>The document will be split into chunks and embedded for RAG search. This may take a moment.</span>
+        </div>
+        <button type="submit" class="btn btn-primary">Register Document</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -108,6 +108,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     application.include_router(web_rag_router)
 
+    from src.web.routes.rag_documents import router as web_rag_documents_router
+
+    application.include_router(web_rag_documents_router)
+
     from src.web.routes.agent import router as web_agent_router
 
     application.include_router(web_agent_router)

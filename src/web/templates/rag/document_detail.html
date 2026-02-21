@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block title %}{{ document.title }} - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="flex flex-col gap-4">
+  <div class="flex justify-between items-center">
+    <div>
+      <h1 class="text-2xl font-bold">{{ document.title }}</h1>
+      <p class="text-base-content/70 mt-1 text-sm">
+        Created: {{ document.created_at.strftime("%Y-%m-%d %H:%M") }}
+      </p>
+    </div>
+    <div class="flex gap-2">
+      <a href="/web/rag/documents" class="btn btn-outline btn-sm">Back to List</a>
+      <form method="post" action="/web/rag/documents/{{ document.id }}/delete"
+        hx-confirm="Are you sure you want to delete this document and all its chunks?">
+        <button type="submit" class="btn btn-error btn-sm">Delete</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="card bg-base-100 shadow">
+    <div class="card-body">
+      <h2 class="card-title text-lg">Content</h2>
+      <pre class="whitespace-pre-wrap text-sm bg-base-200 p-4 rounded-lg max-h-96 overflow-y-auto">{{ document.content[:2000] }}</pre>
+      {% if document.content|length > 2000 %}
+      <p class="text-base-content/50 text-sm">Showing first 2000 characters of {{ document.content|length }} total.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card bg-base-100 shadow">
+    <div class="card-body">
+      <h2 class="card-title text-lg">Chunks ({{ chunks|length }})</h2>
+      {% if chunks %}
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Content</th>
+              <th>Embedding</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for chunk in chunks %}
+            <tr>
+              <td>{{ chunk.chunk_index }}</td>
+              <td class="max-w-md truncate">{{ chunk.content[:200] }}</td>
+              <td>
+                {% if chunk.embedding is not none %}
+                <span class="badge badge-success badge-sm">Yes</span>
+                {% else %}
+                <span class="badge badge-warning badge-sm">No</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-base-content/50">No chunks found for this document.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
