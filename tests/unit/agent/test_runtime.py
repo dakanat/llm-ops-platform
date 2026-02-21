@@ -23,12 +23,18 @@ class _StubTool:
     name: ClassVar[str] = "calculator"
     description: ClassVar[str] = "Evaluate math."
 
-    def __init__(self, result: str = "4", error: str | None = None) -> None:
+    def __init__(
+        self,
+        result: str = "4",
+        error: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
         self._result = result
         self._error = error
+        self._metadata = metadata
 
     async def execute(self, input_text: str) -> ToolResult:
-        return ToolResult(output=self._result, error=self._error)
+        return ToolResult(output=self._result, error=self._error, metadata=self._metadata)
 
 
 # ── Helper ───────────────────────────────────────────────────
@@ -399,3 +405,62 @@ class TestLLMCallSequence:
         assert len(messages) == 4
         assert "Observation:" in messages[3].content
         assert "42" in messages[3].content
+
+
+# ── Metadata propagation ─────────────────────────────────────
+
+
+class TestMetadataPropagation:
+    """ツール実行結果の metadata が AgentStep に伝播されることを検証する。"""
+
+    @pytest.mark.asyncio
+    async def test_tool_metadata_propagated_to_step(self) -> None:
+        meta = {"sources": [{"id": "doc-1"}]}
+        tool = _StubTool(result="found it", metadata=meta)
+        provider = _make_mock_provider(
+            [
+                "Thought: Search\nAction: calculator\nAction Input: query",
+                "Thought: Done\nFinal Answer: result",
+            ]
+        )
+        runtime = AgentRuntime(
+            llm_provider=provider,
+            model="m",
+            tool_registry=_make_registry(tool),
+        )
+        result = await runtime.run("q")
+        assert result.steps[0].metadata == meta
+
+    @pytest.mark.asyncio
+    async def test_no_metadata_when_tool_returns_none(self) -> None:
+        tool = _StubTool(result="4")
+        provider = _make_mock_provider(
+            [
+                "Thought: Calc\nAction: calculator\nAction Input: 2+2",
+                "Thought: Done\nFinal Answer: 4",
+            ]
+        )
+        runtime = AgentRuntime(
+            llm_provider=provider,
+            model="m",
+            tool_registry=_make_registry(tool),
+        )
+        result = await runtime.run("q")
+        assert result.steps[0].metadata is None
+
+    @pytest.mark.asyncio
+    async def test_error_tool_has_no_metadata(self) -> None:
+        tool = _StubTool(result="", error="fail", metadata={"should": "ignore"})
+        provider = _make_mock_provider(
+            [
+                "Thought: Try\nAction: calculator\nAction Input: bad",
+                "Thought: Done\nFinal Answer: error",
+            ]
+        )
+        runtime = AgentRuntime(
+            llm_provider=provider,
+            model="m",
+            tool_registry=_make_registry(tool),
+        )
+        result = await runtime.run("q")
+        assert result.steps[0].metadata is None

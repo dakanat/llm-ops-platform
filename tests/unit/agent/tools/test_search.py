@@ -192,3 +192,67 @@ class TestSearchToolErrorHandling:
         tool = SearchTool(pipeline=pipeline)
         result = await tool.execute("   ")
         assert result.is_error is True
+
+
+# ---------------------------------------------------------------------------
+# TestSearchToolMetadata
+# ---------------------------------------------------------------------------
+class TestSearchToolMetadata:
+    """SearchTool の metadata.sources 構造を検証する。"""
+
+    @pytest.mark.asyncio
+    async def test_metadata_contains_sources_key(self) -> None:
+        doc_id = uuid.uuid4()
+        sources = [_make_retrieved_chunk(content="chunk1", chunk_index=0, document_id=doc_id)]
+        gen_result = _make_generation_result(answer="answer", sources=sources)
+        pipeline = _make_pipeline_mock(generation_result=gen_result)
+        tool = SearchTool(pipeline=pipeline)
+        result = await tool.execute("query")
+        assert result.metadata is not None
+        assert "sources" in result.metadata
+
+    @pytest.mark.asyncio
+    async def test_metadata_sources_structure(self) -> None:
+        doc_id = uuid.uuid4()
+        sources = [
+            _make_retrieved_chunk(content="chunk content", chunk_index=2, document_id=doc_id),
+        ]
+        gen_result = _make_generation_result(answer="answer", sources=sources)
+        pipeline = _make_pipeline_mock(generation_result=gen_result)
+        tool = SearchTool(pipeline=pipeline)
+        result = await tool.execute("query")
+        assert result.metadata is not None
+        src = result.metadata["sources"][0]
+        assert src["document_id"] == str(doc_id)
+        assert src["chunk_index"] == 2
+        assert src["content"] == "chunk content"
+
+    @pytest.mark.asyncio
+    async def test_metadata_sources_count_matches(self) -> None:
+        doc_id = uuid.uuid4()
+        sources = [
+            _make_retrieved_chunk(content="a", chunk_index=0, document_id=doc_id),
+            _make_retrieved_chunk(content="b", chunk_index=1, document_id=doc_id),
+        ]
+        gen_result = _make_generation_result(answer="answer", sources=sources)
+        pipeline = _make_pipeline_mock(generation_result=gen_result)
+        tool = SearchTool(pipeline=pipeline)
+        result = await tool.execute("query")
+        assert result.metadata is not None
+        assert len(result.metadata["sources"]) == 2
+
+    @pytest.mark.asyncio
+    async def test_empty_sources_yields_empty_list(self) -> None:
+        gen_result = _make_generation_result(answer="no sources", sources=[])
+        pipeline = _make_pipeline_mock(generation_result=gen_result)
+        tool = SearchTool(pipeline=pipeline)
+        result = await tool.execute("query")
+        assert result.metadata is not None
+        assert result.metadata["sources"] == []
+
+    @pytest.mark.asyncio
+    async def test_error_result_has_no_metadata(self) -> None:
+        pipeline = _make_pipeline_mock(error=RAGPipelineError("fail"))
+        tool = SearchTool(pipeline=pipeline)
+        result = await tool.execute("query")
+        assert result.metadata is None

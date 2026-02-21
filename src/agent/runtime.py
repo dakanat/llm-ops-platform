@@ -99,6 +99,7 @@ class AgentRuntime:
             observation: str
             is_error = False
 
+            metadata: dict[str, object] | None = None
             try:
                 tool = self._tool_registry.get(parsed.tool_name)
             except ToolNotFoundError:
@@ -111,6 +112,7 @@ class AgentRuntime:
                     is_error = True
                 else:
                     observation = result.output
+                    metadata = result.metadata
 
             step = AgentStep(
                 thought=parsed.thought,
@@ -118,6 +120,7 @@ class AgentRuntime:
                 action_input=parsed.tool_input,
                 observation=observation,
                 is_error=is_error,
+                metadata=metadata,
             )
             state.add_step(step)
 

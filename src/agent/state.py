@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel
 
 
@@ -17,6 +19,7 @@ class AgentStep(BaseModel):
         action_input: ツールへの入力。
         observation: ツール実行結果。
         is_error: observation がエラーかどうか。
+        metadata: ツール実行から伝播された構造化データ。
     """
 
     thought: str
@@ -24,6 +27,7 @@ class AgentStep(BaseModel):
     action_input: str | None = None
     observation: str | None = None
     is_error: bool = False
+    metadata: dict[str, Any] | None = None
 
 
 class AgentState:

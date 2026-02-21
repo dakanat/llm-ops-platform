@@ -52,7 +52,20 @@ class SearchTool:
         except RAGPipelineError as e:
             return ToolResult(output="", error=str(e))
 
-        return ToolResult(output=self._format_output(result))
+        from src.rag.generator import GenerationResult
+
+        assert isinstance(result, GenerationResult)
+        metadata = {
+            "sources": [
+                {
+                    "document_id": str(src.document_id),
+                    "chunk_index": src.chunk_index,
+                    "content": src.content,
+                }
+                for src in result.sources
+            ]
+        }
+        return ToolResult(output=self._format_output(result), metadata=metadata)
 
     @staticmethod
     def _format_output(result: object) -> str:

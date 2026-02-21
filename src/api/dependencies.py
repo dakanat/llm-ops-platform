@@ -117,14 +117,18 @@ async def get_rag_pipeline(
         await embedder.close()
 
 
-def get_tool_registry() -> ToolRegistry:
-    """Return a ToolRegistry with default tools registered."""
+async def get_tool_registry(
+    pipeline: Annotated[RAGPipeline, Depends(get_rag_pipeline)],
+) -> AsyncGenerator[ToolRegistry, None]:
+    """Return a ToolRegistry with all tools registered."""
     from src.agent.tools.calculator import CalculatorTool
     from src.agent.tools.registry import ToolRegistry as _ToolRegistry
+    from src.agent.tools.search import SearchTool
 
     registry = _ToolRegistry()
     registry.register(CalculatorTool())
-    return registry
+    registry.register(SearchTool(pipeline=pipeline))
+    yield registry
 
 
 def get_eval_runner() -> EvalRunner:
