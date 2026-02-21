@@ -15,11 +15,12 @@
 
   <!-- Input form (non-streaming) -->
   <form
+    id="chat-form"
     hx-post="/web/chat/send"
     hx-target="#chat-messages"
     hx-swap="beforeend"
-    hx-indicator="#loading-indicator"
-    hx-on::after-request="this.reset()"
+    hx-on::before-request="showCancelBtn()"
+    hx-on::after-request="showSendBtn(); this.reset()"
     class="flex gap-2"
   >
     <input
@@ -30,8 +31,15 @@
       autocomplete="off"
       required
     />
-    <button type="submit" class="btn btn-primary">
+    <!-- Send button (default) -->
+    <button type="submit" id="send-btn" class="btn btn-primary">
       Send
+    </button>
+    <!-- Cancel button (shown during generation) -->
+    <button type="button" id="cancel-btn" class="btn btn-error hidden"
+            onclick="cancelChat()">
+      <span class="loading loading-spinner loading-sm"></span>
+      Stop
     </button>
   </form>
 </div>

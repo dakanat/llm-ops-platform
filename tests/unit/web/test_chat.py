@@ -66,6 +66,23 @@ class TestChatPage:
         assert "text/html" in resp.headers["content-type"]
         assert "Chat" in resp.text
 
+    async def test_send_button_has_id(self, client: AsyncClient, admin_token: str) -> None:
+        with AuthCookies(client, admin_token):
+            resp = await client.get("/web/chat")
+        assert 'id="send-btn"' in resp.text
+
+    async def test_form_does_not_use_global_loading_indicator(
+        self, client: AsyncClient, admin_token: str
+    ) -> None:
+        with AuthCookies(client, admin_token):
+            resp = await client.get("/web/chat")
+        assert 'hx-indicator="#loading-indicator"' not in resp.text
+
+    async def test_cancel_button_exists(self, client: AsyncClient, admin_token: str) -> None:
+        with AuthCookies(client, admin_token):
+            resp = await client.get("/web/chat")
+        assert 'id="cancel-btn"' in resp.text
+
 
 class TestChatSend:
     """Tests for POST /web/chat/send (Agent-integrated)."""

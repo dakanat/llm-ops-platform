@@ -42,6 +42,31 @@ document.addEventListener("htmx:sseMessage", function (event) {
   }
 });
 
+// Chat: toggle send/cancel buttons and disable input during generation
+function showCancelBtn() {
+  document.getElementById("send-btn").classList.add("hidden");
+  document.getElementById("cancel-btn").classList.remove("hidden");
+  var input = document.querySelector("#chat-form input[name='message']");
+  if (input) {
+    input.disabled = true;
+  }
+}
+
+function showSendBtn() {
+  document.getElementById("send-btn").classList.remove("hidden");
+  document.getElementById("cancel-btn").classList.add("hidden");
+  var input = document.querySelector("#chat-form input[name='message']");
+  if (input) {
+    input.disabled = false;
+    input.focus();
+  }
+}
+
+function cancelChat() {
+  htmx.trigger(document.getElementById("chat-form"), "htmx:abort");
+  showSendBtn();
+}
+
 // Auto-dismiss toast notifications
 document.addEventListener("htmx:afterSwap", function (event) {
   if (event.detail.target.id === "toast-container") {
