@@ -1,0 +1,27 @@
+{% if conversations %}
+<ul class="menu menu-sm p-1">
+  {% for conv in conversations %}
+  <li>
+    <a href="/web/chat?cid={{ conv.id }}"
+       class="flex justify-between items-center group min-w-0"
+       hx-get="/web/chat?cid={{ conv.id }}"
+       hx-target="body"
+       hx-push-url="true">
+      <span class="truncate text-xs">{{ conv.title or "Untitled" }}</span>
+      <button class="btn btn-ghost btn-xs shrink-0 opacity-0 group-hover:opacity-100"
+              hx-delete="/web/chat/conversations/{{ conv.id }}"
+              hx-target="#conversation-list"
+              hx-swap="innerHTML"
+              hx-confirm="Delete this conversation?"
+              onclick="event.stopPropagation(); event.preventDefault();">
+        ✕
+      </button>
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<div class="text-center text-base-content/50 text-xs p-4">
+  No conversations yet.
+</div>
+{% endif %}

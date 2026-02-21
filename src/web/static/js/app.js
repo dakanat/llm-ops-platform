@@ -62,10 +62,118 @@ function showSendBtn() {
   }
 }
 
+var _chatEventSource = null;
+
 function cancelChat() {
+  // Close SSE connection if active
+  if (_chatEventSource) {
+    _chatEventSource.close();
+    _chatEventSource = null;
+  }
   htmx.trigger(document.getElementById("chat-form"), "htmx:abort");
   showSendBtn();
 }
+
+// SSE streaming chat handler
+function sendChatStreaming(form) {
+  var messageInput = form.querySelector("input[name='message']");
+  var message = messageInput ? messageInput.value.trim() : "";
+  if (!message) return;
+
+  var convId = document.getElementById("conversation-id");
+  var conversationId = convId ? convId.value : "";
+
+  var url =
+    "/web/chat/stream?message=" +
+    encodeURIComponent(message) +
+    "&conversation_id=" +
+    encodeURIComponent(conversationId);
+
+  showCancelBtn();
+
+  // Clear placeholder text
+  var chatMessages = document.getElementById("chat-messages");
+  var placeholder = chatMessages.querySelector(".text-center.text-base-content\\/50");
+  if (placeholder) placeholder.remove();
+
+  _chatEventSource = new EventSource(url);
+
+  _chatEventSource.addEventListener("user-message", function (e) {
+    var html = JSON.parse(e.data);
+    chatMessages.insertAdjacentHTML("beforeend", html);
+    scrollToBottom("#chat-messages");
+  });
+
+  _chatEventSource.addEventListener("agent-step", function (e) {
+    var html = JSON.parse(e.data);
+    chatMessages.insertAdjacentHTML("beforeend", html);
+    scrollToBottom("#chat-messages");
+  });
+
+  _chatEventSource.addEventListener("agent-answer", function (e) {
+    var html = JSON.parse(e.data);
+    // Remove step indicators (they were temporary progress display)
+    chatMessages.insertAdjacentHTML("beforeend", html);
+    scrollToBottom("#chat-messages");
+  });
+
+  _chatEventSource.addEventListener("conversation-id", function (e) {
+    var data = JSON.parse(JSON.parse(e.data));
+    if (data.id) {
+      _lastConversationId = data.id;
+      if (convId) convId.value = data.id;
+    }
+  });
+
+  _chatEventSource.addEventListener("error-event", function (e) {
+    var data = JSON.parse(e.data);
+    chatMessages.insertAdjacentHTML(
+      "beforeend",
+      '<div class="alert alert-error mt-2"><span>' + data + "</span></div>"
+    );
+    scrollToBottom("#chat-messages");
+  });
+
+  _chatEventSource.addEventListener("done", function () {
+    _chatEventSource.close();
+    _chatEventSource = null;
+    showSendBtn();
+    messageInput.value = "";
+    // Refresh conversation sidebar
+    var sidebar = document.getElementById("conversation-list");
+    if (sidebar && typeof htmx !== "undefined") {
+      htmx.ajax("GET", "/web/chat/conversations", {
+        target: "#conversation-list",
+        swap: "innerHTML",
+      });
+    }
+  });
+
+  _chatEventSource.onerror = function () {
+    _chatEventSource.close();
+    _chatEventSource = null;
+    showSendBtn();
+  };
+}
+
+// Preserve conversation_id across form resets
+var _lastConversationId = "";
+function restoreConversationId() {
+  var el = document.getElementById("conversation-id");
+  if (el && _lastConversationId) {
+    el.value = _lastConversationId;
+  }
+}
+
+// Update conversation_id when a new one arrives in response
+document.addEventListener("htmx:afterSwap", function (event) {
+  if (event.detail.target.id === "chat-messages") {
+    var el = document.getElementById("conversation-id");
+    if (el && el.value) {
+      _lastConversationId = el.value;
+    }
+  }
+});
 
 // Expand / collapse truncated table cells
 function toggleExpand(el) {

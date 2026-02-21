@@ -1,0 +1,8 @@
+<div class="text-xs opacity-70 border-l-2 border-base-300 pl-2 my-1">
+  {% if step.action %}
+  <span class="badge badge-primary badge-xs">{{ step.action }}</span>
+  {% else %}
+  <span class="badge badge-ghost badge-xs">Thinking</span>
+  {% endif %}
+  <span class="ml-1">{{ step.thought }}</span>
+</div>

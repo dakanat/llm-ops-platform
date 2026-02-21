@@ -1,3 +1,12 @@
+{% if conversation_id is defined and conversation_id %}
+<script>
+  (function() {
+    var el = document.getElementById("conversation-id");
+    if (el) { el.value = "{{ conversation_id }}"; }
+    _lastConversationId = "{{ conversation_id }}";
+  })();
+</script>
+{% endif %}
 <div class="chat chat-end">
   <div class="chat-bubble chat-bubble-primary">{{ user_message }}</div>
 </div>
@@ -49,18 +58,27 @@
 {% endif %}
 
 {% if sources is defined and sources %}
-<div class="mt-2 space-y-2">
-  <h4 class="text-sm font-semibold">Sources</h4>
-  {% for source in sources %}
-  <div class="card card-compact bg-base-200">
-    <div class="card-body">
-      <div class="flex justify-between items-center">
-        <span class="badge badge-outline badge-sm">Chunk #{{ source.chunk_index }}</span>
-        <a href="/web/rag/documents/{{ source.document_id }}" class="link link-hover text-xs opacity-50">{{ source.document_id }}</a>
+<div class="mt-2">
+  <div class="collapse collapse-arrow bg-base-200">
+    <input type="checkbox" />
+    <div class="collapse-title font-medium text-sm">
+      Sources ({{ sources | length }})
+    </div>
+    <div class="collapse-content space-y-1">
+      {% for source in sources %}
+      <div class="collapse collapse-arrow bg-base-100 border border-base-300 rounded">
+        <input type="checkbox" />
+        <div class="collapse-title text-xs py-1 min-h-0">
+          <span class="badge badge-outline badge-sm">Chunk #{{ source.chunk_index }}</span>
+          <a href="/web/rag/documents/{{ source.document_id }}"
+             class="link link-hover text-xs opacity-50 ml-2">{{ source.document_id[:8] }}...</a>
+        </div>
+        <div class="collapse-content">
+          <p class="text-xs whitespace-pre-wrap">{{ source.content }}</p>
+        </div>
       </div>
-      <p class="text-xs whitespace-pre-wrap">{{ source.content }}</p>
+      {% endfor %}
     </div>
   </div>
-  {% endfor %}
 </div>
 {% endif %}

@@ -3,44 +3,70 @@
 {% block title %}Chat - {{ app_name }}{% endblock %}
 
 {% block content %}
-<div class="flex flex-col h-[calc(100vh-6rem)]">
-  <h1 class="text-2xl font-bold mb-4">Chat</h1>
-
-  <!-- Message area -->
-  <div id="chat-messages" class="flex-1 overflow-y-auto space-y-2 mb-4 p-4 bg-base-100 rounded-box shadow">
-    <div class="text-center text-base-content/50 py-8">
-      Start a conversation by typing a message below.
+<div class="flex h-[calc(100vh-6rem)]">
+  <!-- Conversation sidebar -->
+  <div class="w-64 border-r border-base-300 flex flex-col shrink-0">
+    <div class="p-2 flex justify-between items-center">
+      <span class="font-semibold text-sm">Conversations</span>
+      <button hx-post="/web/chat/conversations/new"
+              hx-target="body"
+              class="btn btn-xs btn-ghost">+ New</button>
+    </div>
+    <div id="conversation-list" class="flex-1 overflow-y-auto"
+         hx-get="/web/chat/conversations" hx-trigger="load" hx-swap="innerHTML">
     </div>
   </div>
 
-  <!-- Input form (non-streaming) -->
-  <form
-    id="chat-form"
-    hx-post="/web/chat/send"
-    hx-target="#chat-messages"
-    hx-swap="beforeend"
-    hx-on::before-request="showCancelBtn()"
-    hx-on::after-request="showSendBtn(); this.reset()"
-    class="flex gap-2"
-  >
-    <input
-      type="text"
-      name="message"
-      placeholder="Type your message..."
-      class="input input-bordered flex-1"
-      autocomplete="off"
-      required
-    />
-    <!-- Send button (default) -->
-    <button type="submit" id="send-btn" class="btn btn-primary">
-      Send
-    </button>
-    <!-- Cancel button (shown during generation) -->
-    <button type="button" id="cancel-btn" class="btn btn-error hidden"
-            onclick="cancelChat()">
-      <span class="loading loading-spinner loading-sm"></span>
-      Stop
-    </button>
-  </form>
+  <!-- Chat area -->
+  <div class="flex-1 flex flex-col min-w-0">
+    <!-- Message area -->
+    <div id="chat-messages" class="flex-1 overflow-y-auto space-y-2 p-4 bg-base-100">
+      {% if messages is defined and messages %}
+        {% for msg in messages %}
+          {% if msg.role == "user" %}
+          <div class="chat chat-end">
+            <div class="chat-bubble chat-bubble-primary">{{ msg.content }}</div>
+          </div>
+          {% elif msg.role == "assistant" %}
+          <div class="chat chat-start">
+            <div class="chat-bubble">{{ msg.content }}</div>
+          </div>
+          {% endif %}
+        {% endfor %}
+      {% else %}
+      <div class="text-center text-base-content/50 py-8">
+        Start a conversation by typing a message below.
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Input form (streaming via EventSource) -->
+    <form
+      id="chat-form"
+      onsubmit="event.preventDefault(); sendChatStreaming(this);"
+      class="flex gap-2 p-2"
+    >
+      <input type="hidden" name="conversation_id" id="conversation-id"
+             value="{{ conversation_id | default('', true) }}" />
+      <input
+        type="text"
+        name="message"
+        placeholder="Type your message..."
+        class="input input-bordered flex-1"
+        autocomplete="off"
+        required
+      />
+      <!-- Send button (default) -->
+      <button type="submit" id="send-btn" class="btn btn-primary">
+        Send
+      </button>
+      <!-- Cancel button (shown during generation) -->
+      <button type="button" id="cancel-btn" class="btn btn-error hidden"
+              onclick="cancelChat()">
+        <span class="loading loading-spinner loading-sm"></span>
+        Stop
+      </button>
+    </form>
+  </div>
 </div>
 {% endblock %}
