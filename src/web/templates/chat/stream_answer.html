@@ -21,7 +21,8 @@
         <div class="collapse-title text-xs py-1 min-h-0">
           <span class="badge badge-outline badge-sm">Chunk #{{ source.chunk_index }}</span>
           <a href="/web/rag/documents/{{ source.document_id }}"
-             class="link link-hover text-xs opacity-50 ml-2">{{ source.document_id[:8] }}...</a>
+             target="_blank" hx-boost="false"
+             class="link link-hover text-xs opacity-50 ml-2 relative z-10">{{ source.document_id[:8] }}...</a>
         </div>
         <div class="collapse-content">
           <p class="text-xs whitespace-pre-wrap">{{ source.content }}</p>
