@@ -102,3 +102,48 @@ class TestAdminCosts:
         assert "gemini" in resp.text.lower()
 
         test_app.dependency_overrides.clear()
+
+
+class TestAdminAuditLogs:
+    """Tests for GET /web/admin/audit-logs."""
+
+    async def test_audit_logs_returns_200_for_admin(
+        self, test_app: FastAPI, client: AsyncClient, admin_token: str
+    ) -> None:
+        """admin で 200 が返ること。"""
+        from unittest.mock import AsyncMock
+
+        from src.db.session import get_session
+
+        mock_session = AsyncMock()
+        count_result = MagicMock()
+        count_result.one.return_value = 0
+        items_result = MagicMock()
+        items_result.all.return_value = []
+        mock_session.exec.side_effect = [count_result, items_result]
+
+        test_app.dependency_overrides[get_session] = lambda: mock_session
+
+        with AuthCookies(client, admin_token):
+            resp = await client.get("/web/admin/audit-logs")
+        assert resp.status_code == 200
+        assert "No audit logs yet" in resp.text
+
+    async def test_audit_logs_returns_403_for_viewer(
+        self, client: AsyncClient, viewer_token: str
+    ) -> None:
+        """viewer で 403 が返ること。"""
+        with AuthCookies(client, viewer_token):
+            resp = await client.get("/web/admin/audit-logs")
+        assert (
+            resp.status_code == 403 or "Forbidden" in resp.text or "permission" in resp.text.lower()
+        )
+
+    async def test_admin_page_contains_audit_logs_section(
+        self, client: AsyncClient, admin_token: str
+    ) -> None:
+        """メインページに audit-logs htmx 要素が含まれること。"""
+        with AuthCookies(client, admin_token):
+            resp = await client.get("/web/admin")
+        assert resp.status_code == 200
+        assert "audit-logs" in resp.text.lower() or "Audit Logs" in resp.text

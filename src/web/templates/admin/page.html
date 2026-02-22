@@ -20,5 +20,20 @@
       </div>
     </div>
   </div>
+
+  <!-- Audit Logs -->
+  <div class="card bg-base-100 shadow">
+    <div class="card-body">
+      <h2 class="card-title">Audit Logs</h2>
+      <div
+        hx-get="/web/admin/audit-logs"
+        hx-trigger="load"
+        hx-swap="innerHTML"
+        id="audit-logs"
+      >
+        <span class="loading loading-spinner loading-sm"></span> Loading...
+      </div>
+    </div>
+  </div>
 </div>
 {% endblock %}

@@ -1,0 +1,56 @@
+<div class="space-y-4">
+  {% if audit_logs %}
+  <div class="overflow-x-auto">
+    <table class="table table-sm">
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>User ID</th>
+          <th>Action</th>
+          <th>Resource Type</th>
+          <th>Resource ID</th>
+          <th>Details</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in audit_logs %}
+        <tr>
+          <td class="whitespace-nowrap">{{ log.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+          <td class="font-mono text-xs">{{ log.user_id | string | truncate(8, true, '') }}</td>
+          <td><span class="badge badge-sm">{{ log.action }}</span></td>
+          <td>{{ log.resource_type }}</td>
+          <td class="font-mono text-xs">{{ log.resource_id | truncate(8, true, '') }}</td>
+          <td class="text-xs">{{ log.details }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  {% if total_pages > 1 %}
+  <div class="join flex justify-center">
+    {% if page > 1 %}
+    <button class="join-item btn btn-sm"
+            hx-get="/web/admin/audit-logs?page={{ page - 1 }}"
+            hx-target="#audit-logs"
+            hx-swap="innerHTML">
+      &laquo;
+    </button>
+    {% endif %}
+    <button class="join-item btn btn-sm btn-active">{{ page }} / {{ total_pages }}</button>
+    {% if page < total_pages %}
+    <button class="join-item btn btn-sm"
+            hx-get="/web/admin/audit-logs?page={{ page + 1 }}"
+            hx-target="#audit-logs"
+            hx-swap="innerHTML">
+      &raquo;
+    </button>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% else %}
+  <p class="text-base-content/50">No audit logs yet.</p>
+  {% endif %}
+</div>

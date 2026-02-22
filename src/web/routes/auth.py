@@ -14,6 +14,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from src.api.middleware.auth import create_access_token, hash_password, verify_password
 from src.config import Settings
 from src.db.models import User
+from src.security.audit_log import log_action
 from src.web.csrf import generate_csrf_token
 from src.web.templates import templates
 
@@ -82,10 +83,51 @@ async def login_submit(request: Request) -> Response:
         await session.close()
 
     if user is None or not verify_password(password, user.hashed_password):
+        if user is not None:
+            audit_session = await _get_session()
+            try:
+                reason = "invalid_password" if user.is_active else "inactive_account"
+                await log_action(
+                    session=audit_session,
+                    user_id=user.id,
+                    action="login_failed",
+                    resource_type="auth",
+                    resource_id=str(user.id),
+                    details={"reason": reason},
+                )
+                await audit_session.commit()
+            finally:
+                await audit_session.close()
         return _render_login(request, settings, error="Invalid email or password")
 
     if not user.is_active:
+        audit_session = await _get_session()
+        try:
+            await log_action(
+                session=audit_session,
+                user_id=user.id,
+                action="login_failed",
+                resource_type="auth",
+                resource_id=str(user.id),
+                details={"reason": "inactive_account"},
+            )
+            await audit_session.commit()
+        finally:
+            await audit_session.close()
         return _render_login(request, settings, error="Invalid email or password")
+
+    audit_session = await _get_session()
+    try:
+        await log_action(
+            session=audit_session,
+            user_id=user.id,
+            action="login",
+            resource_type="auth",
+            resource_id=str(user.id),
+        )
+        await audit_session.commit()
+    finally:
+        await audit_session.close()
 
     token = create_access_token(
         user_id=user.id,
@@ -148,6 +190,13 @@ async def register_submit(request: Request) -> Response:
     session = await _get_session()
     try:
         session.add(user)
+        await log_action(
+            session=session,
+            user_id=user.id,
+            action="register",
+            resource_type="user",
+            resource_id=str(user.id),
+        )
         await session.commit()
     except IntegrityError:
         await session.rollback()

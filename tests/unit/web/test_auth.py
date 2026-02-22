@@ -39,6 +39,7 @@ async def client(test_app: FastAPI) -> AsyncGenerator[AsyncClient, None]:
 def _make_mock_session(user: MagicMock | None = None) -> AsyncMock:
     """Create a mock session that returns the given user."""
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()  # add() is synchronous in SQLAlchemy
     mock_result = MagicMock()
     mock_result.first.return_value = user
     mock_session.exec.return_value = mock_result
@@ -142,6 +143,118 @@ class TestLogout:
         assert resp.headers["location"] == "/web/login"
         cookie_header = resp.headers.get("set-cookie", "")
         assert "access_token" in cookie_header
+
+
+class TestLoginAuditLogging:
+    """Tests for audit logging in POST /web/login."""
+
+    async def test_login_success_calls_log_action(self, client: AsyncClient) -> None:
+        """ログイン成功時に log_action が呼ばれること。"""
+        mock_user = MagicMock()
+        mock_user.id = UUID("00000000-0000-0000-0000-000000000001")
+        mock_user.email = "admin@example.com"
+        mock_user.role = "admin"
+        mock_user.hashed_password = hash_password("correct-password")
+        mock_user.is_active = True
+
+        mock_session = _make_mock_session(mock_user)
+
+        async def _fake_get_session() -> AsyncMock:
+            return mock_session
+
+        with (
+            patch("src.web.routes.auth._get_session", side_effect=_fake_get_session),
+            patch("src.web.routes.auth.log_action", new_callable=AsyncMock) as mock_log,
+        ):
+            resp = await client.post(
+                "/web/login",
+                data={"email": "admin@example.com", "password": "correct-password"},
+            )
+        assert resp.status_code == 303
+        mock_log.assert_called_once()
+        call_kwargs = mock_log.call_args.kwargs
+        assert call_kwargs["action"] == "login"
+        assert call_kwargs["resource_type"] == "auth"
+        assert call_kwargs["user_id"] == UUID("00000000-0000-0000-0000-000000000001")
+
+    async def test_login_failed_known_user_calls_log_action(self, client: AsyncClient) -> None:
+        """パスワード不一致時に login_failed で log_action が呼ばれること。"""
+        mock_user = MagicMock()
+        mock_user.id = UUID("00000000-0000-0000-0000-000000000001")
+        mock_user.email = "admin@example.com"
+        mock_user.role = "admin"
+        mock_user.hashed_password = hash_password("correct-password")
+        mock_user.is_active = True
+
+        mock_session = _make_mock_session(mock_user)
+
+        async def _fake_get_session() -> AsyncMock:
+            return mock_session
+
+        with (
+            patch("src.web.routes.auth._get_session", side_effect=_fake_get_session),
+            patch("src.web.routes.auth.log_action", new_callable=AsyncMock) as mock_log,
+        ):
+            resp = await client.post(
+                "/web/login",
+                data={"email": "admin@example.com", "password": "wrong-password"},
+            )
+        assert resp.status_code == 200
+        mock_log.assert_called_once()
+        call_kwargs = mock_log.call_args.kwargs
+        assert call_kwargs["action"] == "login_failed"
+        assert call_kwargs["resource_type"] == "auth"
+        assert call_kwargs["details"]["reason"] == "invalid_password"
+
+    async def test_login_failed_unknown_user_does_not_call_log_action(
+        self, client: AsyncClient
+    ) -> None:
+        """ユーザー不在時は log_action が呼ばれないこと。"""
+        mock_session = _make_mock_session(None)
+
+        async def _fake_get_session() -> AsyncMock:
+            return mock_session
+
+        with (
+            patch("src.web.routes.auth._get_session", side_effect=_fake_get_session),
+            patch("src.web.routes.auth.log_action", new_callable=AsyncMock) as mock_log,
+        ):
+            resp = await client.post(
+                "/web/login",
+                data={"email": "unknown@example.com", "password": "whatever"},
+            )
+        assert resp.status_code == 200
+        mock_log.assert_not_called()
+
+
+class TestRegisterAuditLogging:
+    """Tests for audit logging in POST /web/register."""
+
+    async def test_register_success_calls_log_action(self, client: AsyncClient) -> None:
+        """登録成功時に log_action が呼ばれること。"""
+        mock_session = AsyncMock()
+        mock_session.add = MagicMock()
+
+        async def _fake_get_session() -> AsyncMock:
+            return mock_session
+
+        with (
+            patch("src.web.routes.auth._get_session", side_effect=_fake_get_session),
+            patch("src.web.routes.auth.log_action", new_callable=AsyncMock) as mock_log,
+        ):
+            resp = await client.post(
+                "/web/register",
+                data={
+                    "email": "new@example.com",
+                    "name": "New User",
+                    "password": "securepassword123",
+                },
+            )
+        assert resp.status_code == 303
+        mock_log.assert_called_once()
+        call_kwargs = mock_log.call_args.kwargs
+        assert call_kwargs["action"] == "register"
+        assert call_kwargs["resource_type"] == "user"
 
 
 class TestRootRedirect:
