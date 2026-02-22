@@ -18,6 +18,7 @@ from src.db.models import EvalDatasetRecord, EvalExampleRecord
 from src.db.session import get_session
 from src.eval import SyntheticDataError
 from src.eval.synthetic_data import SyntheticDataGenerator
+from src.security.audit_log import log_action
 from src.security.permission import Permission, require_permission
 
 router = APIRouter(prefix="/eval/datasets")
@@ -138,6 +139,15 @@ async def create_eval_dataset(
         session.add(record)
         examples.append(record)
 
+    await log_action(
+        session=session,
+        user_id=uuid.UUID(current_user.sub),
+        action="create",
+        resource_type="eval_dataset",
+        resource_id=str(dataset.id),
+        details={"name": request.name, "example_count": len(request.examples)},
+    )
+
     try:
         await session.commit()
     except IntegrityError as e:
@@ -209,9 +219,13 @@ async def get_eval_dataset(
 async def delete_eval_dataset(
     dataset_id: uuid.UUID,
     session: Annotated[AsyncSession, Depends(get_session)],
-    _user: Annotated[None, Depends(require_permission(Permission.EVAL_RUN))],
+    user: Annotated[None, Depends(require_permission(Permission.EVAL_RUN))],
 ) -> Response:
     """データセットを削除する (CASCADE で examples も削除)。"""
+    from src.api.middleware.auth import TokenPayload
+
+    current_user: TokenPayload = user  # type: ignore[assignment]
+
     dataset = await session.get(EvalDatasetRecord, dataset_id)
     if dataset is None:
         raise HTTPException(
@@ -220,6 +234,14 @@ async def delete_eval_dataset(
         )
 
     await session.delete(dataset)
+    await log_action(
+        session=session,
+        user_id=uuid.UUID(current_user.sub),
+        action="delete",
+        resource_type="eval_dataset",
+        resource_id=str(dataset_id),
+        details={"name": dataset.name},
+    )
     await session.commit()
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -261,6 +283,15 @@ async def generate_synthetic_dataset(
         )
         session.add(record)
         examples.append(record)
+
+    await log_action(
+        session=session,
+        user_id=uuid.UUID(current_user.sub),
+        action="generate",
+        resource_type="eval_dataset",
+        resource_id=str(dataset.id),
+        details={"name": request.name, "example_count": len(eval_dataset.examples)},
+    )
 
     try:
         await session.commit()

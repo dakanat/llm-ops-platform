@@ -79,7 +79,7 @@ class TestRegisterUser:
 
         await client.post("/auth/register", json=_VALID_PAYLOAD)
 
-        added_user = session.add.call_args[0][0]
+        added_user = session.add.call_args_list[0][0][0]
         assert added_user.hashed_password != _VALID_PAYLOAD["password"]
         assert bcrypt.checkpw(
             _VALID_PAYLOAD["password"].encode(),
@@ -155,3 +155,19 @@ class TestRegisterUser:
         response = await client.post("/auth/register", json=payload)
 
         assert response.json()["email"] == "user@example.com"
+
+    async def test_register_calls_log_action(self, client: AsyncClient, test_app: FastAPI) -> None:
+        """登録成功時に log_action が呼ばれること。"""
+        from unittest.mock import AsyncMock, patch
+
+        session = _make_session()
+        _override_deps(test_app, session=session)
+
+        with patch("src.api.routes.auth.log_action", new_callable=AsyncMock) as mock_log:
+            response = await client.post("/auth/register", json=_VALID_PAYLOAD)
+
+        assert response.status_code == 201
+        mock_log.assert_called_once()
+        call_kwargs = mock_log.call_args.kwargs
+        assert call_kwargs["action"] == "register"
+        assert call_kwargs["resource_type"] == "user"

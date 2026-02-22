@@ -14,6 +14,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from src.api.middleware.auth import create_access_token, hash_password
 from src.db.models import User
 from src.db.session import get_session
+from src.security.audit_log import log_action
 
 router = APIRouter(prefix="/auth")
 
@@ -61,6 +62,14 @@ async def register_user(
         role="user",
     )
     session.add(user)
+
+    await log_action(
+        session=session,
+        user_id=user.id,
+        action="register",
+        resource_type="user",
+        resource_id=str(user.id),
+    )
 
     try:
         await session.commit()

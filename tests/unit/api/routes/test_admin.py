@@ -1,4 +1,4 @@
-"""Tests for GET /admin/metrics and GET /admin/costs endpoints."""
+"""Tests for GET /admin/metrics, GET /admin/costs, and GET /admin/audit-logs endpoints."""
 
 from __future__ import annotations
 
@@ -151,3 +151,121 @@ class TestAdminCostsRoute:
         response = await client.get("/admin/costs")
 
         assert response.status_code == 403
+
+
+def _make_audit_session(
+    *,
+    audit_logs: list[object] | None = None,
+    total: int = 0,
+) -> AsyncMock:
+    """Create a mock session for audit log queries."""
+
+    from unittest.mock import MagicMock
+
+    session = AsyncMock()
+    session.add = MagicMock()
+
+    # exec is called twice: once for count, once for items
+    count_result = MagicMock()
+    count_result.one.return_value = total
+
+    items_result = MagicMock()
+    items_result.all.return_value = audit_logs or []
+
+    session.exec.side_effect = [count_result, items_result]
+    return session
+
+
+def _override_audit_deps(
+    app: FastAPI,
+    *,
+    user: TokenPayload | None = None,
+    session: AsyncMock | None = None,
+) -> None:
+    """Set dependency overrides for audit log tests."""
+    from src.api.dependencies import get_cost_tracker
+    from src.api.middleware.auth import get_current_user
+    from src.db.session import get_session
+
+    if user is not None:
+        app.dependency_overrides[get_current_user] = lambda: user
+    if session is not None:
+        app.dependency_overrides[get_session] = lambda: session
+    app.dependency_overrides[get_cost_tracker] = lambda: _mock_cost_tracker()
+
+
+class TestAdminAuditLogs:
+    """GET /admin/audit-logs のテスト。"""
+
+    async def test_audit_logs_returns_200_for_admin(
+        self, client: AsyncClient, admin_user: TokenPayload, test_app: FastAPI
+    ) -> None:
+        """admin ユーザーで 200 が返ること。"""
+        session = _make_audit_session(total=0)
+        _override_audit_deps(test_app, user=admin_user, session=session)
+
+        response = await client.get("/admin/audit-logs")
+
+        assert response.status_code == 200
+
+    async def test_audit_logs_returns_paginated_response(
+        self, client: AsyncClient, admin_user: TokenPayload, test_app: FastAPI
+    ) -> None:
+        """items, total, page, page_size フィールドが含まれること。"""
+        session = _make_audit_session(total=0)
+        _override_audit_deps(test_app, user=admin_user, session=session)
+
+        response = await client.get("/admin/audit-logs")
+
+        data = response.json()
+        assert "items" in data
+        assert "total" in data
+        assert "page" in data
+        assert "page_size" in data
+
+    async def test_audit_logs_returns_403_for_viewer(
+        self, client: AsyncClient, viewer_user: TokenPayload, test_app: FastAPI
+    ) -> None:
+        """viewer で 403 が返ること。"""
+        session = _make_audit_session(total=0)
+        _override_audit_deps(test_app, user=viewer_user, session=session)
+
+        response = await client.get("/admin/audit-logs")
+
+        assert response.status_code == 403
+
+    async def test_audit_logs_returns_401_without_auth(self, client: AsyncClient) -> None:
+        """未認証で 401 が返ること。"""
+        response = await client.get("/admin/audit-logs")
+
+        assert response.status_code in (401, 403)
+
+    async def test_audit_logs_returns_items_with_expected_fields(
+        self, client: AsyncClient, admin_user: TokenPayload, test_app: FastAPI
+    ) -> None:
+        """レスポンスの items に必要なフィールドが含まれること。"""
+        import uuid
+        from datetime import UTC, datetime
+        from unittest.mock import MagicMock
+
+        mock_log = MagicMock()
+        mock_log.id = uuid.uuid4()
+        mock_log.user_id = uuid.uuid4()
+        mock_log.action = "create"
+        mock_log.resource_type = "eval_dataset"
+        mock_log.resource_id = str(uuid.uuid4())
+        mock_log.details = {"name": "ds-1"}
+        mock_log.created_at = datetime.now(UTC)
+
+        session = _make_audit_session(audit_logs=[mock_log], total=1)
+        _override_audit_deps(test_app, user=admin_user, session=session)
+
+        response = await client.get("/admin/audit-logs")
+
+        data = response.json()
+        assert data["total"] == 1
+        assert len(data["items"]) == 1
+        item = data["items"][0]
+        assert item["action"] == "create"
+        assert item["resource_type"] == "eval_dataset"
+        assert item["details"]["name"] == "ds-1"

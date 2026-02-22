@@ -495,3 +495,97 @@ class TestGenerateSyntheticDataset:
         )
 
         assert response.status_code == 422
+
+
+class TestEvalDatasetAuditLogging:
+    """eval dataset 操作の監査ログテスト。"""
+
+    async def test_create_dataset_calls_log_action(
+        self, client: AsyncClient, test_app: FastAPI
+    ) -> None:
+        """create 成功時に log_action が呼ばれること。"""
+        from unittest.mock import patch
+
+        session = _make_session()
+        _override_deps(test_app, session=session, user=_make_admin_user())
+
+        with patch("src.api.routes.eval_datasets.log_action", new_callable=AsyncMock) as mock_log:
+            response = await client.post(
+                "/eval/datasets",
+                json={"name": "audit-ds", "examples": _VALID_EXAMPLES},
+            )
+
+        assert response.status_code == 201
+        mock_log.assert_called_once()
+        call_kwargs = mock_log.call_args.kwargs
+        assert call_kwargs["action"] == "create"
+        assert call_kwargs["resource_type"] == "eval_dataset"
+        assert call_kwargs["user_id"] == uuid.UUID(_USER_UUID)
+        assert call_kwargs["details"]["name"] == "audit-ds"
+        assert call_kwargs["details"]["example_count"] == 1
+
+    async def test_delete_dataset_calls_log_action(
+        self, client: AsyncClient, test_app: FastAPI
+    ) -> None:
+        """delete 成功時に log_action が呼ばれること。"""
+        from unittest.mock import patch
+
+        from src.db.models import EvalDatasetRecord
+
+        ds = EvalDatasetRecord(name="ds-to-delete", created_by=uuid.uuid4())
+        session = _make_session()
+        session.get.return_value = ds
+        _override_deps(test_app, session=session, user=_make_admin_user())
+
+        with patch("src.api.routes.eval_datasets.log_action", new_callable=AsyncMock) as mock_log:
+            response = await client.delete(f"/eval/datasets/{ds.id}")
+
+        assert response.status_code == 204
+        mock_log.assert_called_once()
+        call_kwargs = mock_log.call_args.kwargs
+        assert call_kwargs["action"] == "delete"
+        assert call_kwargs["resource_type"] == "eval_dataset"
+        assert call_kwargs["details"]["name"] == "ds-to-delete"
+
+    async def test_delete_dataset_not_found_does_not_call_log_action(
+        self, client: AsyncClient, test_app: FastAPI
+    ) -> None:
+        """404 時に log_action が呼ばれないこと。"""
+        from unittest.mock import patch
+
+        session = _make_session()
+        session.get.return_value = None
+        _override_deps(test_app, session=session, user=_make_admin_user())
+
+        with patch("src.api.routes.eval_datasets.log_action", new_callable=AsyncMock) as mock_log:
+            response = await client.delete(f"/eval/datasets/{uuid.uuid4()}")
+
+        assert response.status_code == 404
+        mock_log.assert_not_called()
+
+    async def test_generate_dataset_calls_log_action(
+        self, client: AsyncClient, test_app: FastAPI
+    ) -> None:
+        """generate 成功時に log_action が呼ばれること。"""
+        from unittest.mock import patch
+
+        generator = AsyncMock()
+        generator.generate.return_value = EvalDataset(
+            name="synthetic",
+            examples=[EvalExample(query="Q1", expected_answer="A1")],
+        )
+        session = _make_session()
+        _override_deps(test_app, session=session, user=_make_admin_user(), generator=generator)
+
+        with patch("src.api.routes.eval_datasets.log_action", new_callable=AsyncMock) as mock_log:
+            response = await client.post(
+                "/eval/datasets/generate",
+                json={"name": "gen-audit", "text": "Some text"},
+            )
+
+        assert response.status_code == 201
+        mock_log.assert_called_once()
+        call_kwargs = mock_log.call_args.kwargs
+        assert call_kwargs["action"] == "generate"
+        assert call_kwargs["resource_type"] == "eval_dataset"
+        assert call_kwargs["details"]["name"] == "gen-audit"
