@@ -495,6 +495,7 @@ class TestConversationEndpoints:
         cid = uuid.UUID("00000000-0000-0000-0000-000000000010")
         mock_service = AsyncMock()
         mock_service.delete_conversation.return_value = True
+        mock_service.list_conversations.return_value = []
         original = chat_module._create_conversation_service
         chat_module._create_conversation_service = lambda *a, **kw: mock_service
 
@@ -502,6 +503,65 @@ class TestConversationEndpoints:
             with AuthCookies(client, admin_token):
                 resp = await client.delete(f"/web/chat/conversations/{cid}")
             assert resp.status_code == 200
+        finally:
+            chat_module._create_conversation_service = original
+
+    async def test_sidebar_delete_button_not_nested_in_link(
+        self, test_app: FastAPI, client: AsyncClient, admin_token: str
+    ) -> None:
+        """Delete button must NOT be inside <a> to avoid stopPropagation blocking htmx."""
+        import uuid
+
+        import src.web.routes.chat as chat_module
+        from src.db.models import Conversation
+
+        cid = uuid.UUID("00000000-0000-0000-0000-000000000010")
+        uid = uuid.UUID("00000000-0000-0000-0000-000000000001")
+        mock_service = AsyncMock()
+        mock_service.list_conversations.return_value = [
+            Conversation(id=cid, user_id=uid, title="Test Conv"),
+        ]
+        original = chat_module._create_conversation_service
+        chat_module._create_conversation_service = lambda *a, **kw: mock_service
+
+        try:
+            with AuthCookies(client, admin_token):
+                resp = await client.get("/web/chat/conversations")
+            body = resp.text
+            # The delete button (hx-delete) must not be inside the <a> tag
+            # Verify: <a ...>...</a> should NOT contain hx-delete
+            import re
+
+            links = re.findall(r"<a\b[^>]*>.*?</a>", body, re.DOTALL)
+            for link in links:
+                assert "hx-delete" not in link, "Delete button should not be nested inside <a> tag"
+        finally:
+            chat_module._create_conversation_service = original
+
+    async def test_sidebar_items_have_text_truncation(
+        self, test_app: FastAPI, client: AsyncClient, admin_token: str
+    ) -> None:
+        """Sidebar conversation titles should be truncated with CSS."""
+        import uuid
+
+        import src.web.routes.chat as chat_module
+        from src.db.models import Conversation
+
+        cid = uuid.UUID("00000000-0000-0000-0000-000000000010")
+        uid = uuid.UUID("00000000-0000-0000-0000-000000000001")
+        mock_service = AsyncMock()
+        mock_service.list_conversations.return_value = [
+            Conversation(id=cid, user_id=uid, title="A very long conversation title"),
+        ]
+        original = chat_module._create_conversation_service
+        chat_module._create_conversation_service = lambda *a, **kw: mock_service
+
+        try:
+            with AuthCookies(client, admin_token):
+                resp = await client.get("/web/chat/conversations")
+            body = resp.text
+            assert "truncate" in body
+            assert "min-w-0" in body
         finally:
             chat_module._create_conversation_service = original
 
@@ -566,6 +626,185 @@ class TestChatSendWithConversation:
             call_kwargs = mock_runtime.run.call_args
             assert call_kwargs[1].get("conversation_history") is not None
             assert len(call_kwargs[1]["conversation_history"]) == 2
+        finally:
+            chat_module._create_runtime = original_create
+            chat_module._create_conversation_service = original_service
+            test_app.dependency_overrides.clear()
+
+
+class TestUntitledConversationRename:
+    """Tests for auto-renaming untitled conversations on first message."""
+
+    async def test_send_updates_title_for_untitled_conversation(
+        self, test_app: FastAPI, client: AsyncClient, admin_token: str
+    ) -> None:
+        """POST /web/chat/send should set title when conversation is untitled."""
+        import uuid
+
+        import src.web.routes.chat as chat_module
+        from src.db.models import Conversation
+
+        cid = uuid.UUID("00000000-0000-0000-0000-000000000010")
+        uid = uuid.UUID("00000000-0000-0000-0000-000000000001")
+
+        mock_runtime = AsyncMock()
+        mock_runtime.run.return_value = AgentResult(
+            answer="Response",
+            steps=[AgentStep(thought="thinking")],
+            total_steps=1,
+            stopped_by_max_steps=False,
+        )
+
+        mock_service = AsyncMock()
+        mock_service.get_conversation.return_value = Conversation(
+            id=cid,
+            user_id=uid,
+            title=None,
+        )
+        mock_service.get_messages.return_value = []
+        mock_service.add_message.return_value = None
+        mock_service.update_title.return_value = None
+
+        from src.agent.tools.registry import ToolRegistry
+        from src.api.dependencies import get_llm_model, get_llm_provider, get_tool_registry
+
+        test_app.dependency_overrides[get_llm_provider] = lambda: AsyncMock()
+        test_app.dependency_overrides[get_llm_model] = lambda: "test-model"
+        test_app.dependency_overrides[get_tool_registry] = lambda: ToolRegistry()
+
+        original_create = chat_module._create_runtime
+        original_service = chat_module._create_conversation_service
+
+        chat_module._create_runtime = lambda *a, **kw: mock_runtime
+        chat_module._create_conversation_service = lambda *a, **kw: mock_service
+
+        try:
+            with AuthCookies(client, admin_token):
+                resp = await client.post(
+                    "/web/chat/send",
+                    data={"message": "Hello world", "conversation_id": str(cid)},
+                )
+            assert resp.status_code == 200
+            mock_service.update_title.assert_awaited_once_with(cid, "Hello world")
+        finally:
+            chat_module._create_runtime = original_create
+            chat_module._create_conversation_service = original_service
+            test_app.dependency_overrides.clear()
+
+    async def test_send_does_not_update_title_for_titled_conversation(
+        self, test_app: FastAPI, client: AsyncClient, admin_token: str
+    ) -> None:
+        """POST /web/chat/send should NOT update title when conversation already has one."""
+        import uuid
+
+        import src.web.routes.chat as chat_module
+        from src.db.models import Conversation
+
+        cid = uuid.UUID("00000000-0000-0000-0000-000000000010")
+        uid = uuid.UUID("00000000-0000-0000-0000-000000000001")
+
+        mock_runtime = AsyncMock()
+        mock_runtime.run.return_value = AgentResult(
+            answer="Response",
+            steps=[AgentStep(thought="thinking")],
+            total_steps=1,
+            stopped_by_max_steps=False,
+        )
+
+        mock_service = AsyncMock()
+        mock_service.get_conversation.return_value = Conversation(
+            id=cid,
+            user_id=uid,
+            title="Existing title",
+        )
+        mock_service.get_messages.return_value = []
+        mock_service.add_message.return_value = None
+
+        from src.agent.tools.registry import ToolRegistry
+        from src.api.dependencies import get_llm_model, get_llm_provider, get_tool_registry
+
+        test_app.dependency_overrides[get_llm_provider] = lambda: AsyncMock()
+        test_app.dependency_overrides[get_llm_model] = lambda: "test-model"
+        test_app.dependency_overrides[get_tool_registry] = lambda: ToolRegistry()
+
+        original_create = chat_module._create_runtime
+        original_service = chat_module._create_conversation_service
+
+        chat_module._create_runtime = lambda *a, **kw: mock_runtime
+        chat_module._create_conversation_service = lambda *a, **kw: mock_service
+
+        try:
+            with AuthCookies(client, admin_token):
+                resp = await client.post(
+                    "/web/chat/send",
+                    data={"message": "New message", "conversation_id": str(cid)},
+                )
+            assert resp.status_code == 200
+            mock_service.update_title.assert_not_awaited()
+        finally:
+            chat_module._create_runtime = original_create
+            chat_module._create_conversation_service = original_service
+            test_app.dependency_overrides.clear()
+
+    async def test_stream_updates_title_for_untitled_conversation(
+        self, test_app: FastAPI, client: AsyncClient, admin_token: str
+    ) -> None:
+        """GET /web/chat/stream should set title when conversation is untitled."""
+        import uuid
+
+        import src.web.routes.chat as chat_module
+        from src.agent.runtime import AgentAnswerEvent, AgentStepEvent
+        from src.agent.state import AgentStep as _AgentStep
+        from src.db.models import Conversation
+
+        async def _mock_streaming(*args: object, **kwargs: object):  # type: ignore[no-untyped-def]
+            yield AgentStepEvent(
+                step=_AgentStep(thought="thinking"),
+                step_number=1,
+            )
+            yield AgentAnswerEvent(
+                answer="Response",
+                total_steps=1,
+                stopped_by_max_steps=False,
+                sources=[],
+            )
+
+        cid = uuid.UUID("00000000-0000-0000-0000-000000000010")
+        uid = uuid.UUID("00000000-0000-0000-0000-000000000001")
+
+        mock_runtime = AsyncMock()
+        mock_runtime.run_streaming = _mock_streaming
+
+        mock_service = AsyncMock()
+        mock_service.get_conversation.return_value = Conversation(
+            id=cid,
+            user_id=uid,
+            title=None,
+        )
+        mock_service.get_messages.return_value = []
+        mock_service.add_message.return_value = None
+        mock_service.update_title.return_value = None
+
+        from src.agent.tools.registry import ToolRegistry
+        from src.api.dependencies import get_llm_model, get_llm_provider, get_tool_registry
+
+        test_app.dependency_overrides[get_llm_provider] = lambda: AsyncMock()
+        test_app.dependency_overrides[get_llm_model] = lambda: "test-model"
+        test_app.dependency_overrides[get_tool_registry] = lambda: ToolRegistry()
+
+        original_create = chat_module._create_runtime
+        original_service = chat_module._create_conversation_service
+
+        chat_module._create_runtime = lambda *a, **kw: mock_runtime
+        chat_module._create_conversation_service = lambda *a, **kw: mock_service
+
+        try:
+            with AuthCookies(client, admin_token):
+                resp = await client.get(
+                    f"/web/chat/stream?message=Hello+world&conversation_id={cid}"
+                )
+            assert resp.status_code == 200
+            mock_service.update_title.assert_awaited_once_with(cid, "Hello world")
         finally:
             chat_module._create_runtime = original_create
             chat_module._create_conversation_service = original_service
@@ -646,4 +885,206 @@ class TestChatStream:
         with AuthCookies(client, admin_token):
             resp = await client.get("/web/chat/stream?message=")
         assert resp.status_code == 200
-        assert "event: error" in resp.text
+        assert "event: error-event" in resp.text
+
+    async def test_stream_token_level_events(
+        self, test_app: FastAPI, client: AsyncClient, admin_token: str
+    ) -> None:
+        """Verify answer-start, answer-chunk, answer-end SSE events."""
+        import uuid
+
+        import src.web.routes.chat as chat_module
+        from src.agent.runtime import (
+            AgentAnswerChunkEvent,
+            AgentAnswerEndEvent,
+            AgentAnswerStartEvent,
+        )
+        from src.db.models import Conversation
+
+        async def _mock_streaming(*args: object, **kwargs: object):  # type: ignore[no-untyped-def]
+            yield AgentAnswerStartEvent(thought="I know the answer")
+            yield AgentAnswerChunkEvent(chunk="Par")
+            yield AgentAnswerChunkEvent(chunk="is")
+            yield AgentAnswerEndEvent(
+                total_steps=1,
+                stopped_by_max_steps=False,
+                sources=[],
+                full_answer="Paris",
+            )
+
+        mock_runtime = AsyncMock()
+        mock_runtime.run_streaming = _mock_streaming
+
+        mock_service = AsyncMock()
+        cid = uuid.UUID("00000000-0000-0000-0000-000000000050")
+        uid = uuid.UUID("00000000-0000-0000-0000-000000000001")
+        mock_service.create_conversation.return_value = Conversation(id=cid, user_id=uid)
+        mock_service.get_conversation.return_value = None
+        mock_service.get_messages.return_value = []
+        mock_service.add_message.return_value = None
+        mock_service.update_title.return_value = None
+
+        from src.agent.tools.registry import ToolRegistry
+        from src.api.dependencies import get_llm_model, get_llm_provider, get_tool_registry
+
+        test_app.dependency_overrides[get_llm_provider] = lambda: AsyncMock()
+        test_app.dependency_overrides[get_llm_model] = lambda: "test-model"
+        test_app.dependency_overrides[get_tool_registry] = lambda: ToolRegistry()
+
+        original_create = chat_module._create_runtime
+        original_service = chat_module._create_conversation_service
+
+        chat_module._create_runtime = lambda *a, **kw: mock_runtime
+        chat_module._create_conversation_service = lambda *a, **kw: mock_service
+
+        try:
+            with AuthCookies(client, admin_token):
+                resp = await client.get("/web/chat/stream?message=Capital+of+France")
+            assert resp.status_code == 200
+            body = resp.text
+            assert "event: answer-start" in body
+            assert "event: answer-chunk" in body
+            assert "event: answer-end" in body
+            assert "event: done" in body
+        finally:
+            chat_module._create_runtime = original_create
+            chat_module._create_conversation_service = original_service
+            test_app.dependency_overrides.clear()
+
+    async def test_stream_answer_end_persists_full_answer(
+        self, test_app: FastAPI, client: AsyncClient, admin_token: str
+    ) -> None:
+        """Verify that full_answer from AgentAnswerEndEvent is persisted."""
+        import uuid
+
+        import src.web.routes.chat as chat_module
+        from src.agent.runtime import (
+            AgentAnswerChunkEvent,
+            AgentAnswerEndEvent,
+            AgentAnswerStartEvent,
+        )
+        from src.db.models import Conversation
+
+        async def _mock_streaming(*args: object, **kwargs: object):  # type: ignore[no-untyped-def]
+            yield AgentAnswerStartEvent(thought="I know")
+            yield AgentAnswerChunkEvent(chunk="Paris")
+            yield AgentAnswerEndEvent(
+                total_steps=1,
+                stopped_by_max_steps=False,
+                sources=[],
+                full_answer="Paris",
+            )
+
+        mock_runtime = AsyncMock()
+        mock_runtime.run_streaming = _mock_streaming
+
+        mock_service = AsyncMock()
+        cid = uuid.UUID("00000000-0000-0000-0000-000000000050")
+        uid = uuid.UUID("00000000-0000-0000-0000-000000000001")
+        mock_service.create_conversation.return_value = Conversation(id=cid, user_id=uid)
+        mock_service.get_conversation.return_value = None
+        mock_service.get_messages.return_value = []
+        mock_service.add_message.return_value = None
+        mock_service.update_title.return_value = None
+
+        from src.agent.tools.registry import ToolRegistry
+        from src.api.dependencies import get_llm_model, get_llm_provider, get_tool_registry
+
+        test_app.dependency_overrides[get_llm_provider] = lambda: AsyncMock()
+        test_app.dependency_overrides[get_llm_model] = lambda: "test-model"
+        test_app.dependency_overrides[get_tool_registry] = lambda: ToolRegistry()
+
+        original_create = chat_module._create_runtime
+        original_service = chat_module._create_conversation_service
+
+        chat_module._create_runtime = lambda *a, **kw: mock_runtime
+        chat_module._create_conversation_service = lambda *a, **kw: mock_service
+
+        try:
+            with AuthCookies(client, admin_token):
+                resp = await client.get("/web/chat/stream?message=Capital+of+France")
+            assert resp.status_code == 200
+            # Verify add_message was called with the full answer
+            calls = mock_service.add_message.call_args_list
+            # Second call should be for assistant message
+            assert len(calls) == 2
+            assert calls[1][0][2] == "Paris"  # content argument
+        finally:
+            chat_module._create_runtime = original_create
+            chat_module._create_conversation_service = original_service
+            test_app.dependency_overrides.clear()
+
+    async def test_stream_mixed_step_and_token_events(
+        self, test_app: FastAPI, client: AsyncClient, admin_token: str
+    ) -> None:
+        """Verify mixed AgentStepEvent + token streaming events."""
+        import uuid
+
+        import src.web.routes.chat as chat_module
+        from src.agent.runtime import (
+            AgentAnswerChunkEvent,
+            AgentAnswerEndEvent,
+            AgentAnswerStartEvent,
+            AgentStepEvent,
+        )
+        from src.agent.state import AgentStep as _AgentStep
+        from src.db.models import Conversation
+
+        async def _mock_streaming(*args: object, **kwargs: object):  # type: ignore[no-untyped-def]
+            yield AgentStepEvent(
+                step=_AgentStep(
+                    thought="searching",
+                    action="search",
+                    action_input="query",
+                    observation="found it",
+                ),
+                step_number=1,
+            )
+            yield AgentAnswerStartEvent(thought="Got it")
+            yield AgentAnswerChunkEvent(chunk="The answer")
+            yield AgentAnswerEndEvent(
+                total_steps=2,
+                stopped_by_max_steps=False,
+                sources=[],
+                full_answer="The answer",
+            )
+
+        mock_runtime = AsyncMock()
+        mock_runtime.run_streaming = _mock_streaming
+
+        mock_service = AsyncMock()
+        cid = uuid.UUID("00000000-0000-0000-0000-000000000050")
+        uid = uuid.UUID("00000000-0000-0000-0000-000000000001")
+        mock_service.create_conversation.return_value = Conversation(id=cid, user_id=uid)
+        mock_service.get_conversation.return_value = None
+        mock_service.get_messages.return_value = []
+        mock_service.add_message.return_value = None
+        mock_service.update_title.return_value = None
+
+        from src.agent.tools.registry import ToolRegistry
+        from src.api.dependencies import get_llm_model, get_llm_provider, get_tool_registry
+
+        test_app.dependency_overrides[get_llm_provider] = lambda: AsyncMock()
+        test_app.dependency_overrides[get_llm_model] = lambda: "test-model"
+        test_app.dependency_overrides[get_tool_registry] = lambda: ToolRegistry()
+
+        original_create = chat_module._create_runtime
+        original_service = chat_module._create_conversation_service
+
+        chat_module._create_runtime = lambda *a, **kw: mock_runtime
+        chat_module._create_conversation_service = lambda *a, **kw: mock_service
+
+        try:
+            with AuthCookies(client, admin_token):
+                resp = await client.get("/web/chat/stream?message=search+query")
+            assert resp.status_code == 200
+            body = resp.text
+            assert "event: agent-step" in body
+            assert "event: answer-start" in body
+            assert "event: answer-chunk" in body
+            assert "event: answer-end" in body
+            assert "event: done" in body
+        finally:
+            chat_module._create_runtime = original_create
+            chat_module._create_conversation_service = original_service
+            test_app.dependency_overrides.clear()

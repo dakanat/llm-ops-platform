@@ -1,0 +1,31 @@
+<div class="chat-footer opacity-50 text-xs">{{ model }}</div>
+{% if stopped_by_max_steps %}
+<div class="alert alert-warning mt-2">
+  <span>Agent reached maximum steps ({{ total_steps }})</span>
+</div>
+{% endif %}
+{% if sources %}
+<div class="mt-2">
+  <div class="collapse collapse-arrow bg-base-200">
+    <input type="checkbox" />
+    <div class="collapse-title font-medium text-sm">
+      Sources ({{ sources | length }})
+    </div>
+    <div class="collapse-content space-y-1">
+      {% for source in sources %}
+      <div class="collapse collapse-arrow bg-base-100 border border-base-300 rounded">
+        <input type="checkbox" />
+        <div class="collapse-title text-xs py-1 min-h-0">
+          <span class="badge badge-outline badge-sm">Chunk #{{ source.chunk_index }}</span>
+          <a href="/web/rag/documents/{{ source.document_id }}"
+             class="link link-hover text-xs opacity-50 ml-2">{{ source.document_id[:8] }}...</a>
+        </div>
+        <div class="collapse-content">
+          <p class="text-xs whitespace-pre-wrap">{{ source.content }}</p>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}

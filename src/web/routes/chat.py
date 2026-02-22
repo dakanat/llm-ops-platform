@@ -179,10 +179,14 @@ async def chat_send(
         except ValueError:
             conv_id = None
 
+    needs_title_update = False
+
     if conv_id:
         conv = await service.get_conversation(conv_id, user_id)
         if not conv:
             conv_id = None
+        else:
+            needs_title_update = not conv.title
 
     if not conv_id:
         conv = await service.create_conversation(user_id, title=message[:50])
@@ -211,8 +215,8 @@ async def chat_send(
     await service.add_message(conv_id, "user", message)
     await service.add_message(conv_id, "assistant", result.answer)
 
-    # Set title for new conversations
-    if not conversation_id_str:
+    # Set title for untitled conversations (e.g. created via "+ New" button)
+    if needs_title_update:
         await service.update_title(conv_id, message[:50])
 
     # Collect RAG sources from steps
@@ -261,14 +265,17 @@ async def chat_stream(
     conversation_id: str = "",
 ) -> StreamingResponse:
     """SSE streaming endpoint for chat messages."""
+    from src.agent.runtime import AgentAnswerChunkEvent as _ChunkEvent
+    from src.agent.runtime import AgentAnswerEndEvent as _EndEvent
     from src.agent.runtime import AgentAnswerEvent as _AnswerEvent
+    from src.agent.runtime import AgentAnswerStartEvent as _StartEvent
     from src.agent.runtime import AgentStepEvent as _StepEvent
 
     message = message.strip()
 
     async def _generate() -> AsyncGenerator[str, None]:
         if not message:
-            yield _sse_event("error", json.dumps({"error": "Message cannot be empty"}))
+            yield _sse_event("error-event", json.dumps({"error": "Message cannot be empty"}))
             yield "event: done\ndata: {}\n\n"
             return
 
@@ -282,10 +289,14 @@ async def chat_stream(
             except ValueError:
                 conv_id = None
 
+        needs_title_update = False
+
         if conv_id:
             conv = await service.get_conversation(conv_id, user_id)
             if not conv:
                 conv_id = None
+            else:
+                needs_title_update = not conv.title
 
         if not conv_id:
             conv = await service.create_conversation(user_id, title=message[:50])
@@ -318,6 +329,29 @@ async def chat_stream(
                     )
                     yield _sse_event("agent-step", step_html)
 
+                elif isinstance(event, _StartEvent):
+                    start_html = _render_template(
+                        "chat/stream_answer_start.html",
+                        {},
+                    )
+                    yield _sse_event("answer-start", start_html)
+
+                elif isinstance(event, _ChunkEvent):
+                    yield _sse_event("answer-chunk", event.chunk)
+
+                elif isinstance(event, _EndEvent):
+                    answer_text = event.full_answer
+                    end_html = _render_template(
+                        "chat/stream_answer_end.html",
+                        {
+                            "model": model,
+                            "total_steps": event.total_steps,
+                            "stopped_by_max_steps": event.stopped_by_max_steps,
+                            "sources": event.sources,
+                        },
+                    )
+                    yield _sse_event("answer-end", end_html)
+
                 elif isinstance(event, _AnswerEvent):
                     answer_text = event.answer
                     answer_html = _render_template(
@@ -332,14 +366,15 @@ async def chat_stream(
                     )
                     yield _sse_event("agent-answer", answer_html)
         except AgentError as e:
-            yield _sse_event("error", json.dumps({"error": str(e)}))
+            yield _sse_event("error-event", json.dumps({"error": str(e)}))
 
         # Persist messages
         await service.add_message(conv_id, "user", message)
         if answer_text:
             await service.add_message(conv_id, "assistant", answer_text)
 
-        if not conversation_id:
+        # Set title for untitled conversations (e.g. created via "+ New" button)
+        if needs_title_update:
             await service.update_title(conv_id, message[:50])
 
         yield "event: done\ndata: {}\n\n"

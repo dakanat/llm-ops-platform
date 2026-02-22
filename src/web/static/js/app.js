@@ -117,6 +117,36 @@ function sendChatStreaming(form) {
     scrollToBottom("#chat-messages");
   });
 
+  // Token-level streaming events
+  _chatEventSource.addEventListener("answer-start", function (e) {
+    var html = JSON.parse(e.data);
+    chatMessages.insertAdjacentHTML("beforeend", html);
+    scrollToBottom("#chat-messages");
+  });
+
+  _chatEventSource.addEventListener("answer-chunk", function (e) {
+    var text = JSON.parse(e.data);
+    var target = document.getElementById("streaming-answer-content");
+    if (target) {
+      target.textContent += text;
+    }
+    scrollToBottom("#chat-messages");
+  });
+
+  _chatEventSource.addEventListener("answer-end", function (e) {
+    var html = JSON.parse(e.data);
+    var answer = document.getElementById("streaming-answer");
+    if (answer) {
+      answer.insertAdjacentHTML("beforeend", html);
+      answer.removeAttribute("id");
+    } else {
+      chatMessages.insertAdjacentHTML("beforeend", html);
+    }
+    var content = document.getElementById("streaming-answer-content");
+    if (content) content.removeAttribute("id");
+    scrollToBottom("#chat-messages");
+  });
+
   _chatEventSource.addEventListener("conversation-id", function (e) {
     var data = JSON.parse(JSON.parse(e.data));
     if (data.id) {
@@ -126,10 +156,11 @@ function sendChatStreaming(form) {
   });
 
   _chatEventSource.addEventListener("error-event", function (e) {
-    var data = JSON.parse(e.data);
+    var data = JSON.parse(JSON.parse(e.data));
+    var msg = data.error || "An error occurred";
     chatMessages.insertAdjacentHTML(
       "beforeend",
-      '<div class="alert alert-error mt-2"><span>' + data + "</span></div>"
+      '<div class="alert alert-error mt-2"><span>' + msg + "</span></div>"
     );
     scrollToBottom("#chat-messages");
   });

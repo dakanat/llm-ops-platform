@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from src.db.models import Conversation, Message
@@ -154,6 +154,11 @@ class ConversationService:
         conv = await self.get_conversation(conversation_id, user_id)
         if conv is None:
             return False
+        # Delete related messages first to avoid FK constraint violation
+        stmt = delete(Message).where(
+            Message.conversation_id == conversation_id,  # type: ignore[arg-type]
+        )
+        await self._session.execute(stmt)
         await self._session.delete(conv)
         await self._session.commit()
         return True

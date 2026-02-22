@@ -1,22 +1,19 @@
 {% if conversations %}
-<ul class="menu menu-sm p-1">
+<ul class="flex flex-col gap-0.5 p-1">
   {% for conv in conversations %}
-  <li>
+  <li class="group flex items-center gap-1 rounded-lg hover:bg-base-200 px-2 py-1.5 min-w-0">
     <a href="/web/chat?cid={{ conv.id }}"
-       class="flex justify-between items-center group min-w-0"
+       class="flex-1 min-w-0 truncate text-xs"
        hx-get="/web/chat?cid={{ conv.id }}"
        hx-target="body"
-       hx-push-url="true">
-      <span class="truncate text-xs">{{ conv.title or "Untitled" }}</span>
-      <button class="btn btn-ghost btn-xs shrink-0 opacity-0 group-hover:opacity-100"
-              hx-delete="/web/chat/conversations/{{ conv.id }}"
-              hx-target="#conversation-list"
-              hx-swap="innerHTML"
-              hx-confirm="Delete this conversation?"
-              onclick="event.stopPropagation(); event.preventDefault();">
-        ✕
-      </button>
-    </a>
+       hx-push-url="true">{{ conv.title or "Untitled" }}</a>
+    <button class="btn btn-ghost btn-xs shrink-0 opacity-0 group-hover:opacity-100"
+            hx-delete="/web/chat/conversations/{{ conv.id }}"
+            hx-target="#conversation-list"
+            hx-swap="innerHTML"
+            hx-confirm="Delete this conversation?">
+      ✕
+    </button>
   </li>
   {% endfor %}
 </ul>
