@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
 from typing import Any, ClassVar
 from unittest.mock import AsyncMock
 
@@ -454,18 +455,18 @@ class TestConversationHistory:
 
 
 class TestRunStreaming:
-    """run_streaming のテスト。"""
+    """run_streaming のテスト (provider.stream 使用)。"""
 
     @pytest.mark.asyncio
     async def test_streaming_yields_step_and_answer_events(self) -> None:
-        from src.agent.runtime import AgentAnswerEvent, AgentStepEvent
+        from src.agent.runtime import AgentAnswerEndEvent, AgentStepEvent
 
         tool = _StubTool(result="4")
-        provider = _make_mock_provider(
+        provider = _make_stream_provider(
             [
-                "Thought: Calculate\nAction: calculator\nAction Input: 2+2",
-                "Thought: Got it\nFinal Answer: 4",
-            ]
+                ["Thought: Calculate\nAction: calculator\nAction Input: 2+2"],
+                ["Thought: Got it\nFinal Answer: 4"],
+            ],
         )
         runtime = AgentRuntime(
             llm_provider=provider,
@@ -476,19 +477,21 @@ class TestRunStreaming:
         async for event in runtime.run_streaming("What is 2+2?"):
             events.append(event)
 
-        assert len(events) == 3  # tool step + final step + answer
-        assert isinstance(events[0], AgentStepEvent)
-        assert events[0].step.action == "calculator"
-        assert isinstance(events[1], AgentStepEvent)
-        assert events[1].step.thought == "Got it"
-        assert isinstance(events[2], AgentAnswerEvent)
-        assert events[2].answer == "4"
+        step_events = [e for e in events if isinstance(e, AgentStepEvent)]
+        assert len(step_events) >= 1
+        assert step_events[0].step.action == "calculator"
+
+        end_events = [e for e in events if isinstance(e, AgentAnswerEndEvent)]
+        assert len(end_events) == 1
+        assert end_events[0].full_answer == "4"
 
     @pytest.mark.asyncio
     async def test_streaming_direct_answer(self) -> None:
-        from src.agent.runtime import AgentAnswerEvent, AgentStepEvent
+        from src.agent.runtime import AgentAnswerEndEvent
 
-        provider = _make_mock_provider(["Thought: I know\nFinal Answer: Paris"])
+        provider = _make_stream_provider(
+            [["Thought: I know\nFinal Answer: Paris"]],
+        )
         runtime = AgentRuntime(
             llm_provider=provider,
             model="m",
@@ -498,19 +501,22 @@ class TestRunStreaming:
         async for event in runtime.run_streaming("Capital of France?"):
             events.append(event)
 
-        assert len(events) == 2  # step + answer
-        assert isinstance(events[0], AgentStepEvent)
-        assert isinstance(events[1], AgentAnswerEvent)
-        assert events[1].answer == "Paris"
-        assert events[1].stopped_by_max_steps is False
+        end_events = [e for e in events if isinstance(e, AgentAnswerEndEvent)]
+        assert len(end_events) == 1
+        assert end_events[0].full_answer == "Paris"
+        assert end_events[0].stopped_by_max_steps is False
 
     @pytest.mark.asyncio
     async def test_streaming_max_steps(self) -> None:
         from src.agent.runtime import AgentAnswerEvent
 
         tool = _StubTool(result="ok")
-        responses = [f"Thought: step{i}\nAction: calculator\nAction Input: {i}" for i in range(2)]
-        provider = _make_mock_provider(responses)
+        provider = _make_stream_provider(
+            [
+                ["Thought: step0\nAction: calculator\nAction Input: 0"],
+                ["Thought: step1\nAction: calculator\nAction Input: 1"],
+            ],
+        )
         runtime = AgentRuntime(
             llm_provider=provider,
             model="m",
@@ -521,17 +527,17 @@ class TestRunStreaming:
         async for event in runtime.run_streaming("q"):
             events.append(event)
 
-        # 2 steps + 1 answer
-        assert len(events) == 3
         answer_event = events[-1]
         assert isinstance(answer_event, AgentAnswerEvent)
         assert answer_event.stopped_by_max_steps is True
 
     @pytest.mark.asyncio
     async def test_streaming_with_conversation_history(self) -> None:
-        from src.agent.runtime import AgentAnswerEvent
+        from src.agent.runtime import AgentAnswerEndEvent
 
-        provider = _make_mock_provider(["Thought: Done\nFinal Answer: yes"])
+        provider = _make_stream_provider(
+            [["Thought: Done\nFinal Answer: yes"]],
+        )
         runtime = AgentRuntime(
             llm_provider=provider,
             model="m",
@@ -545,20 +551,21 @@ class TestRunStreaming:
         async for event in runtime.run_streaming("new q", conversation_history=history):
             events.append(event)
 
-        assert isinstance(events[-1], AgentAnswerEvent)
-        assert events[-1].answer == "yes"
+        end_events = [e for e in events if isinstance(e, AgentAnswerEndEvent)]
+        assert len(end_events) == 1
+        assert end_events[0].full_answer == "yes"
 
     @pytest.mark.asyncio
     async def test_streaming_collects_sources(self) -> None:
-        from src.agent.runtime import AgentAnswerEvent
+        from src.agent.runtime import AgentAnswerEndEvent
 
         meta = {"sources": [{"id": "doc-1"}]}
         tool = _StubTool(result="found", metadata=meta)
-        provider = _make_mock_provider(
+        provider = _make_stream_provider(
             [
-                "Thought: Search\nAction: calculator\nAction Input: q",
-                "Thought: Done\nFinal Answer: result",
-            ]
+                ["Thought: Search\nAction: calculator\nAction Input: q"],
+                ["Thought: Done\nFinal Answer: result"],
+            ],
         )
         runtime = AgentRuntime(
             llm_provider=provider,
@@ -569,10 +576,10 @@ class TestRunStreaming:
         async for event in runtime.run_streaming("q"):
             events.append(event)
 
-        answer = events[-1]
-        assert isinstance(answer, AgentAnswerEvent)
-        assert len(answer.sources) == 1
-        assert answer.sources[0]["id"] == "doc-1"
+        end_events = [e for e in events if isinstance(e, AgentAnswerEndEvent)]
+        assert len(end_events) == 1
+        assert len(end_events[0].sources) == 1
+        assert end_events[0].sources[0]["id"] == "doc-1"
 
 
 # ── Metadata propagation ─────────────────────────────────────
@@ -632,3 +639,325 @@ class TestMetadataPropagation:
         )
         result = await runtime.run("q")
         assert result.steps[0].metadata is None
+
+
+# ── New streaming event models ────────────────────────────────
+
+
+class TestStreamingEventModels:
+    """新しいストリーミングイベントモデルのテスト。"""
+
+    def test_answer_start_event_creation(self) -> None:
+        from src.agent.runtime import AgentAnswerStartEvent
+
+        event = AgentAnswerStartEvent(thought="I know the answer")
+        assert event.thought == "I know the answer"
+
+    def test_answer_chunk_event_creation(self) -> None:
+        from src.agent.runtime import AgentAnswerChunkEvent
+
+        event = AgentAnswerChunkEvent(chunk="Hello")
+        assert event.chunk == "Hello"
+
+    def test_answer_end_event_creation(self) -> None:
+        from src.agent.runtime import AgentAnswerEndEvent
+
+        event = AgentAnswerEndEvent(
+            total_steps=2,
+            stopped_by_max_steps=False,
+            sources=[{"id": "doc-1"}],
+            full_answer="Paris is the capital",
+        )
+        assert event.total_steps == 2
+        assert event.stopped_by_max_steps is False
+        assert len(event.sources) == 1
+        assert event.full_answer == "Paris is the capital"
+
+    def test_answer_end_event_default_sources(self) -> None:
+        from src.agent.runtime import AgentAnswerEndEvent
+
+        event = AgentAnswerEndEvent(
+            total_steps=1,
+            stopped_by_max_steps=False,
+            full_answer="answer",
+        )
+        assert event.sources == []
+
+
+# ── Token-level streaming ─────────────────────────────────────
+
+
+def _make_stream_provider(
+    stream_responses: list[list[str]],
+    complete_responses: list[str] | None = None,
+) -> AsyncMock:
+    """Create a mock LLMProvider that returns chunks from stream().
+
+    Args:
+        stream_responses: List of chunk lists, one per stream() call.
+        complete_responses: Optional list of complete() responses for fallback.
+    """
+    from src.llm.providers.base import LLMChunk
+
+    provider = AsyncMock()
+
+    async def _make_stream(chunks: list[str]) -> AsyncGenerator[Any, None]:
+        for c in chunks:
+            yield LLMChunk(content=c)
+
+    # Each call to provider.stream() returns the next set of chunks
+    call_count = 0
+
+    def _stream_side_effect(*args: Any, **kwargs: Any) -> AsyncGenerator[Any, None]:
+        nonlocal call_count
+        idx = call_count
+        call_count += 1
+        return _make_stream(stream_responses[idx])
+
+    provider.stream = _stream_side_effect
+
+    if complete_responses:
+        provider.complete = AsyncMock(
+            side_effect=[_make_llm_response(r) for r in complete_responses]
+        )
+
+    return provider
+
+
+class TestTokenLevelStreaming:
+    """トークンレベルストリーミングのテスト。"""
+
+    @pytest.mark.asyncio
+    async def test_direct_final_answer_yields_start_chunks_end(self) -> None:
+        """直接 Final Answer が返される場合、Start + Chunk + End イベントシーケンス。"""
+        from src.agent.runtime import (
+            AgentAnswerEndEvent,
+        )
+
+        provider = _make_stream_provider(
+            [["Thought: I know\nFinal Answer: Paris"]],
+        )
+        runtime = AgentRuntime(
+            llm_provider=provider,
+            model="m",
+            tool_registry=ToolRegistry(),
+        )
+        events = []
+        async for event in runtime.run_streaming("Capital of France?"):
+            events.append(event)
+
+        # Should have: StartEvent, ChunkEvent(s), EndEvent
+        event_types = [type(e).__name__ for e in events]
+        assert "AgentAnswerStartEvent" in event_types
+        assert "AgentAnswerChunkEvent" in event_types
+        assert "AgentAnswerEndEvent" in event_types
+
+        # Start should come before chunks, chunks before end
+        start_idx = event_types.index("AgentAnswerStartEvent")
+        end_idx = event_types.index("AgentAnswerEndEvent")
+        assert start_idx < end_idx
+
+        # End event should have the full answer
+        end_event = events[end_idx]
+        assert isinstance(end_event, AgentAnswerEndEvent)
+        assert end_event.full_answer == "Paris"
+        assert end_event.stopped_by_max_steps is False
+
+    @pytest.mark.asyncio
+    async def test_final_answer_marker_split_across_chunks(self) -> None:
+        """Final Answer: マーカーがチャンク境界をまたぐケース。"""
+        from src.agent.runtime import AgentAnswerEndEvent
+
+        provider = _make_stream_provider(
+            [["Thought: I know\nFinal", " Answer: Paris"]],
+        )
+        runtime = AgentRuntime(
+            llm_provider=provider,
+            model="m",
+            tool_registry=ToolRegistry(),
+        )
+        events = []
+        async for event in runtime.run_streaming("q"):
+            events.append(event)
+
+        end_events = [e for e in events if isinstance(e, AgentAnswerEndEvent)]
+        assert len(end_events) == 1
+        assert end_events[0].full_answer == "Paris"
+
+    @pytest.mark.asyncio
+    async def test_action_step_then_final_answer(self) -> None:
+        """Action ステップ後に Final Answer が来る複合フロー。"""
+        from src.agent.runtime import (
+            AgentAnswerEndEvent,
+            AgentAnswerStartEvent,
+            AgentStepEvent,
+        )
+
+        tool = _StubTool(result="4")
+        provider = _make_stream_provider(
+            [
+                ["Thought: Calculate\nAction: calculator\nAction Input: 2+2"],
+                ["Thought: Got it\nFinal Answer: 4"],
+            ],
+        )
+        runtime = AgentRuntime(
+            llm_provider=provider,
+            model="m",
+            tool_registry=_make_registry(tool),
+        )
+        events = []
+        async for event in runtime.run_streaming("What is 2+2?"):
+            events.append(event)
+
+        # Should have step events for action, then streaming answer
+        step_events = [e for e in events if isinstance(e, AgentStepEvent)]
+        assert len(step_events) >= 1
+        assert step_events[0].step.action == "calculator"
+
+        start_events = [e for e in events if isinstance(e, AgentAnswerStartEvent)]
+        assert len(start_events) == 1
+
+        end_events = [e for e in events if isinstance(e, AgentAnswerEndEvent)]
+        assert len(end_events) == 1
+        assert end_events[0].full_answer == "4"
+
+    @pytest.mark.asyncio
+    async def test_max_steps_fallback_uses_answer_event(self) -> None:
+        """最大ステップ到達時は従来の AgentAnswerEvent を使用。"""
+        from src.agent.runtime import AgentAnswerEvent
+
+        tool = _StubTool(result="ok")
+        provider = _make_stream_provider(
+            [
+                ["Thought: step0\nAction: calculator\nAction Input: 0"],
+                ["Thought: step1\nAction: calculator\nAction Input: 1"],
+            ],
+        )
+        runtime = AgentRuntime(
+            llm_provider=provider,
+            model="m",
+            tool_registry=_make_registry(tool),
+            max_steps=2,
+        )
+        events = []
+        async for event in runtime.run_streaming("q"):
+            events.append(event)
+
+        answer_event = events[-1]
+        assert isinstance(answer_event, AgentAnswerEvent)
+        assert answer_event.stopped_by_max_steps is True
+
+    @pytest.mark.asyncio
+    async def test_streaming_answer_chunks_are_incremental(self) -> None:
+        """回答テキストがチャンクごとに増分で送信されること。"""
+        from src.agent.runtime import AgentAnswerChunkEvent
+
+        provider = _make_stream_provider(
+            [["Thought: I know\nFinal Answer: ", "Hello", " world"]],
+        )
+        runtime = AgentRuntime(
+            llm_provider=provider,
+            model="m",
+            tool_registry=ToolRegistry(),
+        )
+        events = []
+        async for event in runtime.run_streaming("q"):
+            events.append(event)
+
+        chunks = [e for e in events if isinstance(e, AgentAnswerChunkEvent)]
+        # Should have received incremental chunks
+        assert len(chunks) >= 1
+        combined = "".join(c.chunk for c in chunks)
+        assert combined == "Hello world"
+
+    @pytest.mark.asyncio
+    async def test_streaming_collects_sources_from_tool_metadata(self) -> None:
+        """ツールメタデータのソースがEndEventに含まれること。"""
+        from src.agent.runtime import AgentAnswerEndEvent
+
+        meta = {"sources": [{"id": "doc-1"}]}
+        tool = _StubTool(result="found", metadata=meta)
+        provider = _make_stream_provider(
+            [
+                ["Thought: Search\nAction: calculator\nAction Input: q"],
+                ["Thought: Done\nFinal Answer: result"],
+            ],
+        )
+        runtime = AgentRuntime(
+            llm_provider=provider,
+            model="m",
+            tool_registry=_make_registry(tool),
+        )
+        events = []
+        async for event in runtime.run_streaming("q"):
+            events.append(event)
+
+        end_events = [e for e in events if isinstance(e, AgentAnswerEndEvent)]
+        assert len(end_events) == 1
+        assert len(end_events[0].sources) == 1
+        assert end_events[0].sources[0]["id"] == "doc-1"
+
+    @pytest.mark.asyncio
+    async def test_streaming_with_conversation_history(self) -> None:
+        """会話履歴がストリーミングでも正しく渡されること。"""
+        from src.agent.runtime import AgentAnswerEndEvent
+
+        provider = _make_stream_provider(
+            [["Thought: Done\nFinal Answer: yes"]],
+        )
+        runtime = AgentRuntime(
+            llm_provider=provider,
+            model="m",
+            tool_registry=ToolRegistry(),
+        )
+        history = [
+            ChatMessage(role=Role.user, content="prev"),
+            ChatMessage(role=Role.assistant, content="prev answer"),
+        ]
+        events = []
+        async for event in runtime.run_streaming("new q", conversation_history=history):
+            events.append(event)
+
+        end_events = [e for e in events if isinstance(e, AgentAnswerEndEvent)]
+        assert len(end_events) == 1
+        assert end_events[0].full_answer == "yes"
+
+    @pytest.mark.asyncio
+    async def test_empty_answer_after_marker(self) -> None:
+        """Final Answer: の後にトークンが無い場合、空の回答として処理。"""
+        from src.agent.runtime import AgentAnswerEndEvent
+
+        provider = _make_stream_provider(
+            [["Thought: I know\nFinal Answer: "]],
+        )
+        runtime = AgentRuntime(
+            llm_provider=provider,
+            model="m",
+            tool_registry=ToolRegistry(),
+        )
+        events = []
+        async for event in runtime.run_streaming("q"):
+            events.append(event)
+
+        end_events = [e for e in events if isinstance(e, AgentAnswerEndEvent)]
+        assert len(end_events) == 1
+        assert end_events[0].full_answer == ""
+
+    @pytest.mark.asyncio
+    async def test_llm_error_during_stream_raises_agent_error(self) -> None:
+        """ストリーム中のエラーがAgentErrorとして伝播すること。"""
+        provider = AsyncMock()
+
+        async def _error_stream(*args: Any, **kwargs: Any) -> AsyncGenerator[Any, None]:
+            raise RuntimeError("API down")
+            yield  # make it a generator  # noqa: E501
+
+        provider.stream = _error_stream
+        runtime = AgentRuntime(
+            llm_provider=provider,
+            model="m",
+            tool_registry=ToolRegistry(),
+        )
+        with pytest.raises(AgentError):
+            async for _ in runtime.run_streaming("q"):
+                pass
