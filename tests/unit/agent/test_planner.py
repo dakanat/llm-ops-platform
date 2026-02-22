@@ -289,3 +289,34 @@ class TestParseResponse:
         planner = ReActPlanner()
         with pytest.raises(AgentParseError):
             planner.parse_response("")
+
+    def test_unformatted_text_returns_final_answer(self) -> None:
+        """ReAct 形式でない自然言語レスポンスが ParsedFinalAnswer として返る。"""
+        planner = ReActPlanner()
+        result = planner.parse_response("Hello! How can I help you today?")
+        assert isinstance(result, ParsedFinalAnswer)
+        assert result.thought == ""
+        assert result.answer == "Hello! How can I help you today?"
+
+    def test_multiline_unformatted_text_returns_final_answer(self) -> None:
+        """複数行の自然言語レスポンスも ParsedFinalAnswer として返る。"""
+        planner = ReActPlanner()
+        text = "Here is the answer:\n- Point 1\n- Point 2\n- Point 3"
+        result = planner.parse_response(text)
+        assert isinstance(result, ParsedFinalAnswer)
+        assert result.thought == ""
+        assert result.answer == text
+
+    def test_final_answer_without_thought_returns_answer(self) -> None:
+        """Final Answer: はあるが Thought: がない場合、空の thought で返る。"""
+        planner = ReActPlanner()
+        result = planner.parse_response("Final Answer: The answer is 42")
+        assert isinstance(result, ParsedFinalAnswer)
+        assert result.thought == ""
+        assert result.answer == "The answer is 42"
+
+    def test_whitespace_only_raises_error(self) -> None:
+        """空白のみのレスポンスは引き続きエラー。"""
+        planner = ReActPlanner()
+        with pytest.raises(AgentParseError):
+            planner.parse_response("   \n\t  ")

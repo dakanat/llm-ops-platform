@@ -7,12 +7,15 @@ from __future__ import annotations
 
 import re
 
+import structlog
 from pydantic import BaseModel
 
 from src.agent import AgentParseError
 from src.agent.state import AgentState
 from src.agent.tools.base import Tool
 from src.llm.providers.base import ChatMessage, Role
+
+logger = structlog.get_logger()
 
 # パースに使用する正規表現パターン
 _THOUGHT_RE = re.compile(r"Thought:\s*(.*?)(?=\n\s*(?:Action:|Final Answer:))", re.DOTALL)
@@ -79,7 +82,9 @@ class ReActPlanner:
             "Action Input: <input to the tool>\n\n"
             "When you have the final answer, respond in EXACTLY this format:\n"
             "Thought: <your reasoning>\n"
-            "Final Answer: <your answer>"
+            "Final Answer: <your answer>\n\n"
+            "IMPORTANT: You MUST always respond using one of the two formats above.\n"
+            "Even for simple greetings or questions, use the Thought/Final Answer format."
         )
 
     def build_messages(self, state: AgentState, tools: list[Tool]) -> list[ChatMessage]:
@@ -126,6 +131,9 @@ class ReActPlanner:
     def parse_response(self, text: str) -> ParsedResponse:
         """LLM 出力を ReAct 形式としてパースする。
 
+        ReAct 形式 (Action: / Final Answer:) に従わないレスポンスは、
+        フォールバックとして全文を ParsedFinalAnswer(thought="", answer=text) として返す。
+
         Args:
             text: LLM の生テキスト出力。
 
@@ -133,7 +141,8 @@ class ReActPlanner:
             ParsedAction または ParsedFinalAnswer。
 
         Raises:
-            AgentParseError: パースに失敗した場合。
+            AgentParseError: 空のレスポンス、または Action 形式で
+                Thought:/Action Input: が欠落している場合。
         """
         text = text.strip()
         if not text:
@@ -143,9 +152,7 @@ class ReActPlanner:
         final_match = _FINAL_ANSWER_RE.search(text)
         if final_match:
             thought_match = _THOUGHT_RE.search(text)
-            if thought_match is None:
-                raise AgentParseError("Missing 'Thought:' in response")
-            thought = thought_match.group(1).strip()
+            thought = thought_match.group(1).strip() if thought_match else ""
             answer = final_match.group(1).strip()
             return ParsedFinalAnswer(thought=thought, answer=answer)
 
@@ -166,4 +173,5 @@ class ReActPlanner:
             tool_input = action_input_match.group(1).strip()
             return ParsedAction(thought=thought, tool_name=tool_name, tool_input=tool_input)
 
-        raise AgentParseError("Response does not contain 'Action:' or 'Final Answer:'")
+        logger.warning("llm_response_missing_react_format", response_preview=text[:200])
+        return ParsedFinalAnswer(thought="", answer=text)

@@ -943,6 +943,72 @@ class TestTokenLevelStreaming:
         assert len(end_events) == 1
         assert end_events[0].full_answer == ""
 
+
+# ── Unformatted response fallback ─────────────────────────────
+
+
+class TestUnformattedResponse:
+    """ReAct 形式に従わない自然言語レスポンスのフォールバックテスト。"""
+
+    @pytest.mark.asyncio
+    async def test_run_returns_unformatted_text_as_answer(self) -> None:
+        """非ストリーミングで自然言語レスポンスが answer として返ること。"""
+        provider = _make_mock_provider(["Hello! How can I help you today?"])
+        runtime = AgentRuntime(
+            llm_provider=provider,
+            model="m",
+            tool_registry=ToolRegistry(),
+        )
+        result = await runtime.run("hello")
+        assert isinstance(result, AgentResult)
+        assert result.answer == "Hello! How can I help you today?"
+        assert result.stopped_by_max_steps is False
+
+    @pytest.mark.asyncio
+    async def test_streaming_unformatted_text_yields_answer_events(self) -> None:
+        """ストリーミングで自然言語レスポンスが Start → Chunk → End として yield されること。"""
+        from src.agent.runtime import (
+            AgentAnswerChunkEvent,
+            AgentAnswerEndEvent,
+            AgentAnswerStartEvent,
+        )
+
+        provider = _make_stream_provider(
+            [["Hello! How can I help you today?"]],
+        )
+        runtime = AgentRuntime(
+            llm_provider=provider,
+            model="m",
+            tool_registry=ToolRegistry(),
+        )
+        events = []
+        async for event in runtime.run_streaming("hello"):
+            events.append(event)
+
+        event_types = [type(e).__name__ for e in events]
+        assert "AgentAnswerStartEvent" in event_types
+        assert "AgentAnswerChunkEvent" in event_types
+        assert "AgentAnswerEndEvent" in event_types
+
+        start_events = [e for e in events if isinstance(e, AgentAnswerStartEvent)]
+        assert start_events[0].thought == ""
+
+        chunk_events = [e for e in events if isinstance(e, AgentAnswerChunkEvent)]
+        combined = "".join(c.chunk for c in chunk_events)
+        assert combined == "Hello! How can I help you today?"
+
+        end_events = [e for e in events if isinstance(e, AgentAnswerEndEvent)]
+        assert len(end_events) == 1
+        assert end_events[0].full_answer == "Hello! How can I help you today?"
+        assert end_events[0].stopped_by_max_steps is False
+
+
+# ── LLM error during streaming ──────────────────────────────
+
+
+class TestStreamingLLMError:
+    """ストリーム中のLLMエラーのテスト。"""
+
     @pytest.mark.asyncio
     async def test_llm_error_during_stream_raises_agent_error(self) -> None:
         """ストリーム中のエラーがAgentErrorとして伝播すること。"""
