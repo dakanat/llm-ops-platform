@@ -21,7 +21,6 @@ class TestSettings:
             settings.database_url
             == "postgresql+asyncpg://postgres:postgres@localhost:5432/llm_platform"
         )
-        assert settings.redis_url == "redis://redis:6379/0"
         assert settings.pii_detection_enabled is True
         assert settings.pii_mask_llm_outbound is True
         assert settings.pii_mask_logs is True
@@ -77,7 +76,7 @@ class TestHealthEndpoint:
         from src.config import Settings
         from src.main import create_app
 
-        test_settings = Settings(rate_limit_enabled=False)
+        test_settings = Settings()
         test_app = create_app(test_settings)
         client = TestClient(test_app)
         response = client.get("/health")

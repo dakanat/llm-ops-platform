@@ -14,7 +14,3 @@ class PromptNotFoundError(PromptError):
 
 class PromptRenderError(PromptError):
     """テンプレートの変数埋め込みに失敗した場合のエラー。"""
-
-
-class CacheError(Exception):
-    """セマンティックキャッシュに関するエラー。"""

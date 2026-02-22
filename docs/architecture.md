@@ -2,13 +2,13 @@
 
 ## システム概要
 
-LLM Ops Platform は RAG・Agent・評価・監視・セキュリティを統合したエンタープライズ向け LLM プラットフォーム。
+LLM Ops Platform は RAG・Agent・評価・監視・セキュリティを統合した LLM プラットフォーム。
 Embedding はデフォルトで Gemini API (`gemini-embedding-001`) を使用（GPU 不要）。ローカル vLLM (`cl-nagoya/ruri-v3-310m`) も代替として利用可能。LLM 推論は Gemini API 経由（デフォルト）。
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                      API Gateway (FastAPI)                  │
-│                  認証 / レート制限 / PIIマスキング            │
+│                  認証 / PIIマスキング                        │
 ├──────────┬──────────┬──────────┬──────────┬─────────────────┤
 │   RAG    │  Agent   │  評価    │   監視   │  セキュリティ    │
 │ Pipeline │ Runtime  │ Engine   │ Metrics  │  Guardian       │
@@ -16,7 +16,7 @@ Embedding はデフォルトで Gemini API (`gemini-embedding-001`) を使用（
 │              LLM Router (プロバイダ切替・フォールバック)       │
 │    Gemini API (デフォルト) / OpenRouter / OpenAI / Anthropic  │
 ├─────────────────────────────────────────────────────────────┤
-│  PostgreSQL 16 + pgvector  │  Redis  │  Gemini Embedding   │
+│  PostgreSQL 16 + pgvector  │  Gemini Embedding              │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -26,12 +26,11 @@ Embedding はデフォルトで Gemini API (`gemini-embedding-001`) を使用（
 |---------|---------|------|--------|
 | app | Dockerfile (FastAPI) | メイン API | 8000 |
 | db | pgvector/pgvector:pg16 | PostgreSQL 16 + pgvector | 5432 |
-| redis | redis:7-alpine | キャッシュ・セッション・レート制限 | 6379 |
 | embedding | vllm/vllm-openai:latest | vLLM Embedding サーバー (cl-nagoya/ruri-v3-310m) — `local-embedding` profile | 8001 |
 
-**ボリューム**: `pgdata` (PostgreSQL), `redisdata` (Redis), `hf_cache` (Hugging Face モデル)
+**ボリューム**: `pgdata` (PostgreSQL), `hf_cache` (Hugging Face モデル)
 
-**起動順序**: db + redis が並列起動 → healthcheck 完了後に app が起動。embedding サービスは `--profile local-embedding` 指定時のみ起動
+**起動順序**: db が起動 → healthcheck 完了後に app が起動。embedding サービスは `--profile local-embedding` 指定時のみ起動
 
 ## 技術スタック
 
@@ -43,7 +42,6 @@ Embedding はデフォルトで Gemini API (`gemini-embedding-001`) を使用（
 | LLM API | Gemini API (デフォルト: gemini-2.5-flash-lite 無料枠) — OpenRouter, OpenAI, Anthropic に切替可能 |
 | Embedding | Gemini API `gemini-embedding-001` (デフォルト, 1024 次元) / cl-nagoya/ruri-v3-310m (vLLM ローカル代替) |
 | Vector DB | pgvector (PostgreSQL 16 拡張, cosine distance) |
-| キャッシュ | Redis 7 (セマンティックキャッシュ, レート制限) |
 | PII 検出 | 正規表現ベース (日本語対応: メール, 電話, マイナンバー, クレカ, 住所) |
 | 監視 | Prometheus client, structlog (JSON) |
 | テスト | pytest, pytest-asyncio |
@@ -58,7 +56,7 @@ llm-ops-platform/
 │   ├── config.py                     # pydantic-settings による設定管理
 │   ├── api/
 │   │   ├── routes/                   # chat, rag, agent, eval, eval_datasets, admin, auth
-│   │   ├── middleware/               # auth (JWT), rate_limit, request_logger
+│   │   ├── middleware/               # auth (JWT), request_logger
 │   │   └── dependencies.py          # FastAPI DI
 │   ├── rag/                          # RAG パイプライン (→ docs/rag-design.md)
 │   ├── agent/                        # Agent Runtime (→ docs/agent-design.md)
@@ -66,7 +64,6 @@ llm-ops-platform/
 │   │   ├── providers/                # base (Protocol), gemini, openai, anthropic, openrouter
 │   │   ├── router.py                 # LLM プロバイダルーティング
 │   │   ├── token_counter.py          # tiktoken によるトークンカウント・コスト推定
-│   │   ├── cache.py                  # セマンティックキャッシュ (Redis)
 │   │   ├── prompt_manager.py         # プロンプト管理・バージョニング
 │   │   └── pii_sanitizing_provider.py # PII マスキング Provider ラッパー
 │   ├── eval/                         # 評価エンジン (→ docs/eval-strategy.md)
@@ -90,7 +87,7 @@ llm-ops-platform/
 │   ├── seed_data.py                  # 初期データ投入 (admin/user/viewer)
 │   └── cost_report.py                # コストレポート生成
 ├── .github/workflows/ci.yml          # CI (lint, format, typecheck, test)
-├── docker-compose.yml                # コンテナ構成 (app, db, redis, embedding)
+├── docker-compose.yml                # コンテナ構成 (app, db, embedding)
 ├── Dockerfile                        # マルチステージビルド (Python 3.12, uv)
 ├── Makefile                          # 開発コマンド
 └── pyproject.toml                    # プロジェクト設定
@@ -155,13 +152,6 @@ users (id, email, name, hashed_password, role, is_active)
 - `EMBEDDING_PROVIDER` 環境変数で切替
 - `_create_embedder()` ファクトリ関数 (`src/api/dependencies.py`) でインスタンス生成
 
-### セマンティックキャッシュ
-
-- Redis に query embedding + response を保存
-- cosine similarity >= 0.95 のクエリはキャッシュヒット
-- TTL 3600 秒 (設定可能)
-- キャッシュ障害時はスルー (graceful degradation)
-
 ### Web フロントエンド
 
 htmx + DaisyUI による Web UI。CDN 配信でビルドステップ不要。
@@ -184,7 +174,6 @@ htmx + DaisyUI による Web UI。CDN 配信でビルドステップ不要。
 
 ### 品質 vs コスト
 - デフォルトは Gemini 無料枠 (gemini-2.5-flash-lite)。品質要件に応じてプロバイダ/モデルを切替
-- セマンティックキャッシュで同一・類似クエリの API 呼び出しを削減
 - Embedding はデフォルトで Gemini 無料枠 (gemini-embedding-001)。ローカル vLLM も選択可能
 
 ### 品質 vs レイテンシ

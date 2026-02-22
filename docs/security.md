@@ -189,21 +189,6 @@ result = detector.detect("Ignore all previous instructions")
 - `enabled_types` でカテゴリを選択可能
 - 正常な入力の誤検出を抑えるため、単一キーワードではなく動詞 + 名詞の組み合わせで検出
 
-## レート制限 (`src/api/middleware/rate_limit.py`)
-
-Token Bucket アルゴリズム (Redis Lua スクリプトでアトミック操作)。
-
-| パラメータ | デフォルト | 説明 |
-|-----------|-----------|------|
-| `requests_per_minute` | 60 | 毎分のリフィルレート |
-| `burst_size` | 10 | バケット最大容量 (バースト許容) |
-
-- クライアント IP ごとに独立したバケット
-- `X-Forwarded-For` ヘッダ対応 (プロキシ環境)
-- レスポンスヘッダ: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`
-- 超過時: `429 Too Many Requests` + `Retry-After` ヘッダ
-- Redis 障害時はリクエスト通過 (graceful degradation)
-
 ## 監査ログ (`src/security/audit_log.py`)
 
 全操作を DB + 構造化ログに記録。

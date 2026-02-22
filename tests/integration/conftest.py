@@ -212,8 +212,8 @@ def make_mock_llm_provider(
 # ---------------------------------------------------------------------------
 @pytest.fixture(scope="module")
 def test_app() -> FastAPI:
-    """Create a FastAPI app with rate limiting disabled."""
-    settings = Settings(rate_limit_enabled=False)
+    """Create a FastAPI app for testing."""
+    settings = Settings()
     return create_app(settings)
 
 

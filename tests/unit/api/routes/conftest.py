@@ -16,8 +16,8 @@ from src.main import create_app
 
 @pytest.fixture(scope="module")
 def test_app() -> FastAPI:
-    """Create a FastAPI app with rate limiting disabled."""
-    settings = Settings(rate_limit_enabled=False)
+    """Create a FastAPI app for testing."""
+    settings = Settings()
     return create_app(settings)
 
 

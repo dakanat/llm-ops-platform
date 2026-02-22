@@ -1,6 +1,6 @@
 # LLM Ops Platform
 
-本番運用可能な LLM アプリケーション基盤。RAG・Agent・評価・監視・セキュリティを統合したエンタープライズ向け LLM プラットフォーム。
+LLM アプリケーション基盤。RAG・Agent・評価・監視・セキュリティを統合した LLM プラットフォーム。
 
 ## 特徴
 
@@ -11,14 +11,13 @@
 - **Web UI**: htmx + DaisyUI による Web フロントエンド (SSE ストリーミング対応)
 - **セキュリティ**: JWT 認証、RBAC 認可、CSRF 保護、PII マスキング、プロンプトインジェクション検出
 - **監視**: structlog 構造化ログ、Prometheus メトリクス、コスト追跡
-- **セマンティックキャッシュ**: Redis による類似クエリのキャッシュ (cosine similarity >= 0.95)
 
 ## アーキテクチャ
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                      API Gateway (FastAPI)                  │
-│                  認証 / レート制限 / PIIマスキング            │
+│                  認証 / PIIマスキング                        │
 ├──────────┬──────────┬──────────┬──────────┬─────────────────┤
 │   RAG    │  Agent   │  評価    │   監視   │  セキュリティ    │
 │ Pipeline │ Runtime  │ Engine   │ Metrics  │  Guardian       │
@@ -26,7 +25,7 @@
 │              LLM Router (プロバイダ切替・フォールバック)       │
 │    Gemini API (デフォルト) / OpenRouter / OpenAI / Anthropic  │
 ├─────────────────────────────────────────────────────────────┤
-│  PostgreSQL 16 + pgvector  │  Redis  │  Gemini Embedding   │
+│  PostgreSQL 16 + pgvector  │  Gemini Embedding              │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -40,7 +39,6 @@
 | LLM API | Gemini API (デフォルト) / OpenRouter / OpenAI / Anthropic |
 | Embedding | Gemini API `gemini-embedding-001` (デフォルト) / vLLM ローカル |
 | Vector DB | pgvector (PostgreSQL 16 拡張) |
-| キャッシュ | Redis 7 |
 | Web UI | htmx + DaisyUI (CDN 配信、ビルドステップ不要) |
 | パッケージ管理 | uv |
 | テスト | pytest, pytest-asyncio |
@@ -87,12 +85,11 @@ curl http://localhost:8000/health
 # 依存関係のインストール
 uv sync
 
-# DB と Redis は Docker で起動
-docker compose up -d db redis
+# DB は Docker で起動
+docker compose up -d db
 
 # 環境変数を設定
 export DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/llm_platform
-export REDIS_URL=redis://localhost:6379/0
 
 # アプリケーション起動
 uv run uvicorn src.main:app --reload --port 8000
@@ -109,7 +106,6 @@ uv run uvicorn src.main:app --reload --port 8000
 | `GEMINI_API_KEY` | — | Gemini API キー |
 | `EMBEDDING_PROVIDER` | `gemini` | Embedding プロバイダ (gemini / local) |
 | `DATABASE_URL` | `postgresql+asyncpg://...` | DB 接続 URL |
-| `REDIS_URL` | `redis://redis:6379/0` | Redis 接続 URL |
 | `JWT_SECRET_KEY` | — | JWT 署名シークレット |
 | `CSRF_SECRET_KEY` | — | CSRF トークン署名シークレット |
 
@@ -174,7 +170,7 @@ llm-ops-platform/
 │   ├── web/                 # Web フロントエンド (htmx + DaisyUI)
 │   ├── rag/                 # RAG パイプライン
 │   ├── agent/               # Agent Runtime (ReAct)
-│   ├── llm/                 # LLM プロバイダ・キャッシュ・PII保護
+│   ├── llm/                 # LLM プロバイダ・PII保護
 │   ├── eval/                # 評価エンジン
 │   ├── monitoring/          # ログ・メトリクス・コスト追跡
 │   ├── security/            # PII検出・インジェクション対策・RBAC

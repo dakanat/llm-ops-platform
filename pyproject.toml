@@ -1,7 +1,7 @@
 [project]
 name = "llm-ops-platform"
 version = "0.1.0"
-description = "Production-ready LLM application platform with RAG, Agent, Evaluation, Monitoring, and Security"
+description = "LLM application platform with RAG, Agent, Evaluation, Monitoring, and Security"
 license = "MIT"
 requires-python = ">=3.12"
 dependencies = [
@@ -13,7 +13,6 @@ dependencies = [
     "asyncpg>=0.30.0",
     "alembic>=1.14.0",
     "pgvector>=0.3.6",
-    "redis>=5.2.0",
     "httpx>=0.28.0",
     "structlog>=24.4.0",
     "prometheus-client>=0.21.0",

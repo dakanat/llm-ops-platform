@@ -6,7 +6,6 @@ from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from src.api.middleware.rate_limit import RateLimitMiddleware
 from src.api.middleware.request_logger import RequestLoggerMiddleware
 from src.api.routes.admin import router as admin_router
 from src.api.routes.agent import router as agent_router
@@ -57,26 +56,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     application = FastAPI(
         title="LLM Ops Platform",
-        description="Production-ready LLM application platform",
+        description="LLM application platform",
         version="0.1.0",
     )
 
-    # Create Redis client for rate limiting (only when enabled)
-    _rate_limit_redis = None
-    if settings.rate_limit_enabled:
-        from redis.asyncio import Redis
-
-        _rate_limit_redis = Redis.from_url(settings.redis_url)
-
-    # Middleware registration order: last added = outermost = runs first.
-    # Execution order: RequestLogger -> RateLimit -> routes
-    application.add_middleware(
-        RateLimitMiddleware,  # type: ignore[arg-type,unused-ignore]  # Starlette typing issue
-        redis_client=_rate_limit_redis,
-        enabled=settings.rate_limit_enabled,
-        requests_per_minute=settings.rate_limit_requests_per_minute,
-        burst_size=settings.rate_limit_burst_size,
-    )
     application.add_middleware(RequestLoggerMiddleware)  # type: ignore[arg-type,unused-ignore]  # Starlette typing issue
 
     # JSON API routers

@@ -16,7 +16,7 @@ from src.config import Settings
 
 def _create_web_app() -> FastAPI:
     """Create a FastAPI app with web routes registered."""
-    settings = Settings(rate_limit_enabled=False)
+    settings = Settings()
     from src.main import create_app
 
     return create_app(settings)
@@ -24,7 +24,7 @@ def _create_web_app() -> FastAPI:
 
 @pytest.fixture(scope="module")
 def test_app() -> FastAPI:
-    """Create a FastAPI app with rate limiting disabled."""
+    """Create a FastAPI app for testing."""
     return _create_web_app()
 
 

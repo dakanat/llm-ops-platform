@@ -2,10 +2,9 @@
 
 ## プロジェクト概要
 
-**LLM Ops Platform** — 本番運用可能なLLMアプリケーション基盤
+**LLM Ops Platform** — LLMアプリケーション基盤
 
-RAG・Agent・評価・監視・セキュリティを統合した、エンタープライズ向けLLMプラットフォーム。
-PoCではなく本番運用を前提とし、品質・コスト・安全性のトレードオフを考慮した設計。
+RAG・Agent・評価・監視・セキュリティを統合した、LLMプラットフォーム。
 
 **ローカル実行前提**: Embedding はデフォルトで Gemini API (`gemini-embedding-001`) を使用（GPU 不要）。ローカル vLLM サーバー (`cl-nagoya/ruri-v3-310m`) も代替として利用可能（VRAM 8GB 環境向け）。LLM 推論は Gemini API 経由（デフォルト）。
 
@@ -100,9 +99,6 @@ EMBEDDING_MODEL=cl-nagoya/ruri-v3-310m
 
 # Database
 DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/llm_platform
-
-# Redis
-REDIS_URL=redis://redis:6379/0
 
 # Security
 JWT_SECRET_KEY=change-me-in-production

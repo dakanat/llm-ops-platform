@@ -29,9 +29,6 @@ class Settings(BaseSettings):
     # Database
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/llm_platform"
 
-    # Redis
-    redis_url: str = "redis://redis:6379/0"
-
     # Security
     jwt_secret_key: str = "change-me-in-production"
     jwt_algorithm: str = "HS256"
@@ -40,16 +37,6 @@ class Settings(BaseSettings):
     pii_mask_llm_outbound: bool = True  # LLM API送信前のマスク
     pii_mask_logs: bool = True  # ログ出力前のマスク
     prompt_injection_detection_enabled: bool = True
-
-    # Semantic Cache
-    cache_ttl_seconds: int = 3600
-    cache_similarity_threshold: float = 0.95
-    cache_enabled: bool = True
-
-    # Rate Limiting
-    rate_limit_enabled: bool = True
-    rate_limit_requests_per_minute: int = 60
-    rate_limit_burst_size: int = 10
 
     # Web Frontend
     csrf_secret_key: str = "change-me-csrf-secret"

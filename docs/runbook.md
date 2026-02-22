@@ -42,12 +42,11 @@ curl http://localhost:8000/health
 # uv で依存関係をインストール
 uv sync
 
-# DB と Redis は Docker で起動
-docker compose up -d db redis
+# DB は Docker で起動
+docker compose up -d db
 
 # 環境変数を設定 (.env を読み込む)
 export DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/llm_platform
-export REDIS_URL=redis://localhost:6379/0
 
 # アプリケーション起動
 uv run uvicorn src.main:app --reload --port 8000
@@ -110,16 +109,12 @@ uv run alembic downgrade -1
 | `EMBEDDING_BASE_URL` | `http://embedding:8001/v1` | ローカル Embedding サーバー URL (`EMBEDDING_PROVIDER=local` 時) |
 | `EMBEDDING_MODEL` | `cl-nagoya/ruri-v3-310m` | ローカル Embedding モデル名 (`EMBEDDING_PROVIDER=local` 時) |
 | `DATABASE_URL` | `postgresql+asyncpg://postgres:postgres@localhost:5432/llm_platform` | DB 接続 URL |
-| `REDIS_URL` | `redis://redis:6379/0` | Redis 接続 URL |
 | `JWT_SECRET_KEY` | — | JWT 署名シークレット (**本番では必ず変更**) |
 | `CSRF_SECRET_KEY` | — | CSRF トークン署名シークレット (**本番では必ず変更**) |
 | `SESSION_COOKIE_SECURE` | `false` | Cookie の Secure 属性 (本番では `true` に設定) |
 | `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | JWT 有効期限 (分) |
 | `PII_DETECTION_ENABLED` | `true` | PII 検出の有効/無効 |
 | `PROMPT_INJECTION_DETECTION_ENABLED` | `true` | インジェクション検出の有効/無効 |
-| `RATE_LIMIT_ENABLED` | `true` | レート制限の有効/無効 |
-| `RATE_LIMIT_REQUESTS_PER_MINUTE` | `60` | レート制限 (リクエスト/分) |
-| `RATE_LIMIT_BURST_SIZE` | `10` | バースト許容量 |
 | `LOG_LEVEL` | `INFO` | ログレベル |
 | `COST_ALERT_THRESHOLD_DAILY_USD` | `10` | 日次コストアラート閾値 (USD) |
 
@@ -157,18 +152,6 @@ make up
 make migrate
 ```
 
-### Redis 接続エラー
-
-```bash
-# Redis の状態確認
-docker compose exec redis redis-cli ping
-
-# メモリ使用量確認
-docker compose exec redis redis-cli info memory
-```
-
-**レート制限の Redis 障害**: Redis が利用不可でもリクエストは通過する (graceful degradation)。
-
 ### アプリケーションの 500 エラー
 
 ```bash
@@ -198,7 +181,6 @@ make test-no-llm
 ## コスト管理
 
 - デフォルトモデル (`gemini-2.5-flash-lite`) は Gemini 無料枠 (15 RPM / 250K TPM / 1000 RPD)
-- セマンティックキャッシュ (Redis) で同一・類似クエリの API 呼び出しを削減
 - Embedding はデフォルトで Gemini 無料枠 (`gemini-embedding-001`, 100 RPM / 1,000 RPD)。ローカル vLLM に切替も可能
 - コスト追跡: `src/monitoring/cost_tracker.py` で日次コストを監視
 - アラート閾値: `COST_ALERT_THRESHOLD_DAILY_USD` (デフォルト: $10/日)
@@ -231,5 +213,4 @@ make test-no-llm
 
 - リクエスト数・レイテンシ
 - LLM API 呼び出し数・トークン使用量
-- キャッシュヒット率
 - エラー率
