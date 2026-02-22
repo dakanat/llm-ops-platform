@@ -57,26 +57,43 @@ llm-ops-platform/
 │   ├── main.py                       # FastAPI エントリポイント (App Factory)
 │   ├── config.py                     # pydantic-settings による設定管理
 │   ├── api/
-│   │   ├── routes/                   # chat, rag, agent, eval, admin
+│   │   ├── routes/                   # chat, rag, agent, eval, eval_datasets, admin, auth
 │   │   ├── middleware/               # auth (JWT), rate_limit, request_logger
 │   │   └── dependencies.py          # FastAPI DI
 │   ├── rag/                          # RAG パイプライン (→ docs/rag-design.md)
 │   ├── agent/                        # Agent Runtime (→ docs/agent-design.md)
 │   ├── llm/
-│   │   ├── providers/                # base (Protocol), openrouter
+│   │   ├── providers/                # base (Protocol), gemini, openai, anthropic, openrouter
 │   │   ├── router.py                 # LLM プロバイダルーティング
+│   │   ├── token_counter.py          # tiktoken によるトークンカウント・コスト推定
 │   │   ├── cache.py                  # セマンティックキャッシュ (Redis)
 │   │   ├── prompt_manager.py         # プロンプト管理・バージョニング
 │   │   └── pii_sanitizing_provider.py # PII マスキング Provider ラッパー
 │   ├── eval/                         # 評価エンジン (→ docs/eval-strategy.md)
 │   ├── monitoring/                   # structlog, Prometheus, コスト追跡
 │   ├── security/                     # PII, インジェクション対策, RBAC (→ docs/security.md)
-│   └── db/                           # SQLModel モデル, pgvector, セッション管理
+│   ├── db/                           # SQLModel モデル, pgvector, セッション管理
+│   └── web/                          # Web フロントエンド (htmx + DaisyUI)
+│       ├── routes/                   # auth, chat, rag, rag_documents, eval, eval_datasets, admin
+│       ├── services/                 # conversation (永続化サービス)
+│       ├── templates/                # Jinja2 テンプレート (auth, chat, rag, eval, admin, components)
+│       ├── static/js/                # JavaScript ユーティリティ
+│       ├── csrf.py                   # CSRF double-submit cookie 保護
+│       ├── dependencies.py           # Cookie 認証 DI (WebAuthRedirect)
+│       └── templates.py              # Jinja2 テンプレート設定
 ├── tests/
 │   ├── unit/                         # ユニットテスト (外部依存はモック)
+│   │   └── web/                      # Web フロントエンドテスト
 │   └── integration/                  # 統合テスト (Docker DB 使用)
 ├── docs/                             # 設計ドキュメント
-└── scripts/                          # 運用スクリプト
+├── scripts/
+│   ├── seed_data.py                  # 初期データ投入 (admin/user/viewer)
+│   └── cost_report.py                # コストレポート生成
+├── .github/workflows/ci.yml          # CI (lint, format, typecheck, test)
+├── docker-compose.yml                # コンテナ構成 (app, db, redis, embedding)
+├── Dockerfile                        # マルチステージビルド (Python 3.12, uv)
+├── Makefile                          # 開発コマンド
+└── pyproject.toml                    # プロジェクト設定
 ```
 
 ## 設計方針
@@ -144,6 +161,24 @@ users (id, email, name, hashed_password, role, is_active)
 - cosine similarity >= 0.95 のクエリはキャッシュヒット
 - TTL 3600 秒 (設定可能)
 - キャッシュ障害時はスルー (graceful degradation)
+
+### Web フロントエンド
+
+htmx + DaisyUI による Web UI。CDN 配信でビルドステップ不要。
+
+- **認証**: HttpOnly Cookie JWT (`access_token` Cookie)。スライディングセッション対応
+- **CSRF 保護**: double-submit cookie パターン (`itsdangerous.URLSafeTimedSerializer`)
+- **ストリーミング**: SSE (Server-Sent Events) によるチャット・Agent のリアルタイムレスポンス
+- **ルーティング**: `/web/` プレフィックスで API と分離
+
+| ページ | パス | 説明 |
+|--------|------|------|
+| ログイン | `/web/login` | メール + パスワード認証 |
+| チャット | `/web/chat` | 会話管理 + SSE ストリーミング |
+| RAG | `/web/rag` | ドキュメント検索 + 登録管理 |
+| 評価 | `/web/eval` | 評価実行ダッシュボード |
+| データセット | `/web/eval/datasets` | 評価データセット管理 |
+| 管理 | `/web/admin` | コストレポート・メトリクス |
 
 ## トレードオフ方針
 

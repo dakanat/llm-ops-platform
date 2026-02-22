@@ -2,13 +2,14 @@
 
 ## 概要
 
-本プラットフォームのセキュリティは以下の 5 層で構成される。
+本プラットフォームのセキュリティは以下の 6 層で構成される。
 
-1. **認証** — JWT Bearer トークン
+1. **認証** — JWT Bearer トークン (API) + HttpOnly Cookie JWT (Web)
 2. **認可** — RBAC (Role-Based Access Control)
-3. **PII 保護** — 信頼境界でのマスキング
-4. **プロンプトインジェクション対策** — パターンベース検出
-5. **監査ログ** — 全操作の記録
+3. **CSRF 保護** — double-submit cookie パターン (Web)
+4. **PII 保護** — 信頼境界でのマスキング
+5. **プロンプトインジェクション対策** — パターンベース検出
+6. **監査ログ** — 全操作の記録
 
 ## 認証 (`src/api/middleware/auth.py`)
 
@@ -34,6 +35,22 @@ JWT (JSON Web Token) による認証。
 
 ### エラー
 - 無効/期限切れトークン → `HTTPException(401)`
+
+### Web 認証 (`src/web/dependencies.py`)
+
+Web フロントエンドでは HttpOnly Cookie ベースの JWT 認証を使用する。
+
+```
+1. ユーザーがログインフォームを送信 (email + password)
+2. 認証成功 → access_token を HttpOnly Cookie にセット
+3. 以降のリクエストで Cookie から JWT を自動送信
+4. get_current_web_user() dependency で検証・デコード
+5. スライディングセッション: TTL 残り < 閾値 → Cookie を自動更新
+```
+
+- **`WebAuthRedirect`**: 未認証時にログインページへリダイレクト。htmx リクエストの場合は `HX-Redirect` ヘッダで応答
+- **`CurrentWebUser`**: `Annotated[TokenPayload, Depends(get_current_web_user)]` 型エイリアス
+- **設定**: `SESSION_COOKIE_SECURE` (本番では `true`)、Cookie 名は `access_token`
 
 ## 認可 (`src/security/permission.py`)
 
@@ -76,6 +93,27 @@ async def metrics(
 ```
 
 - パーミッション不足 → `HTTPException(403)`
+
+## CSRF 保護 (`src/web/csrf.py`)
+
+Web フロントエンドの状態変更リクエスト (POST/PUT/DELETE/PATCH) に対して double-submit cookie パターンで CSRF 攻撃を防御する。
+
+### フロー
+
+```
+1. サーバーがページ描画時に csrf_token Cookie を発行 (署名付き)
+2. クライアントが状態変更リクエストを送信時に X-CSRF-Token ヘッダに同値をセット
+3. require_csrf() dependency が Cookie と Header の値を照合
+4. URLSafeTimedSerializer で署名を検証 (max_age=3600 秒)
+5. 不一致 or 期限切れ → HTTPException(403)
+```
+
+### 設定
+
+| パラメータ | 説明 |
+|-----------|------|
+| `CSRF_SECRET_KEY` | トークン署名シークレット (**本番では必ず変更**) |
+| `max_age` | 3600 秒 (トークン有効期限) |
 
 ## PII 保護
 

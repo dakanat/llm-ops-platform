@@ -2,6 +2,7 @@
 name = "llm-ops-platform"
 version = "0.1.0"
 description = "Production-ready LLM application platform with RAG, Agent, Evaluation, Monitoring, and Security"
+license = "MIT"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115.0",

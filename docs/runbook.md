@@ -5,8 +5,9 @@
 ### 前提条件
 
 - Docker / Docker Compose
-- NVIDIA GPU (VRAM 8GB 以上) + nvidia-container-toolkit
 - uv (Python パッケージマネージャ)
+- Gemini API キー (`GEMINI_API_KEY`) — LLM 推論・Embedding のデフォルトプロバイダ
+- NVIDIA GPU (VRAM 8GB 以上) — **オプション** (`EMBEDDING_PROVIDER=local` でローカル vLLM Embedding を使用する場合のみ必要)
 
 ### 初期セットアップ
 
@@ -17,7 +18,7 @@ cd llm-ops-platform
 
 # 2. 環境変数の設定
 cp .env.example .env
-# .env を編集: GEMINI_API_KEY, JWT_SECRET_KEY を設定
+# .env を編集: GEMINI_API_KEY, JWT_SECRET_KEY, CSRF_SECRET_KEY を設定
 
 # 3. コンテナの起動
 make up    # docker compose up -d --build
@@ -30,6 +31,9 @@ make seed       # uv run python scripts/seed_data.py
 
 # 6. ヘルスチェック
 curl http://localhost:8000/health
+
+# 7. Web UI へアクセス
+# http://localhost:8000/web/login
 ```
 
 ### ローカル開発 (コンテナなし)
@@ -99,11 +103,17 @@ uv run alembic downgrade -1
 | `LLM_MODEL` | `gemini-2.5-flash-lite` | 使用モデル名 |
 | `GEMINI_API_KEY` | — | Gemini API キー |
 | `OPENROUTER_API_KEY` | — | OpenRouter API キー |
-| `EMBEDDING_BASE_URL` | `http://embedding:8001/v1` | Embedding サーバー URL |
-| `EMBEDDING_MODEL` | `cl-nagoya/ruri-v3-310m` | Embedding モデル名 |
+| `OPENAI_API_KEY` | — | OpenAI API キー (`LLM_PROVIDER=openai` 時) |
+| `ANTHROPIC_API_KEY` | — | Anthropic API キー (`LLM_PROVIDER=anthropic` 時) |
+| `EMBEDDING_PROVIDER` | `gemini` | Embedding プロバイダ (gemini / local) |
+| `EMBEDDING_GEMINI_MODEL` | `gemini-embedding-001` | Gemini Embedding モデル名 |
+| `EMBEDDING_BASE_URL` | `http://embedding:8001/v1` | ローカル Embedding サーバー URL (`EMBEDDING_PROVIDER=local` 時) |
+| `EMBEDDING_MODEL` | `cl-nagoya/ruri-v3-310m` | ローカル Embedding モデル名 (`EMBEDDING_PROVIDER=local` 時) |
 | `DATABASE_URL` | `postgresql+asyncpg://postgres:postgres@localhost:5432/llm_platform` | DB 接続 URL |
 | `REDIS_URL` | `redis://redis:6379/0` | Redis 接続 URL |
 | `JWT_SECRET_KEY` | — | JWT 署名シークレット (**本番では必ず変更**) |
+| `CSRF_SECRET_KEY` | — | CSRF トークン署名シークレット (**本番では必ず変更**) |
+| `SESSION_COOKIE_SECURE` | `false` | Cookie の Secure 属性 (本番では `true` に設定) |
 | `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | JWT 有効期限 (分) |
 | `PII_DETECTION_ENABLED` | `true` | PII 検出の有効/無効 |
 | `PROMPT_INJECTION_DETECTION_ENABLED` | `true` | インジェクション検出の有効/無効 |
@@ -116,6 +126,8 @@ uv run alembic downgrade -1
 ## トラブルシューティング
 
 ### Embedding サーバーが起動しない
+
+> **注意**: デフォルト設定 (`EMBEDDING_PROVIDER=gemini`) では Embedding サーバーは不要です。以下は `EMBEDDING_PROVIDER=local` に変更してローカル vLLM を使用する場合のトラブルシューティングです。
 
 ```bash
 # ログ確認
@@ -187,7 +199,7 @@ make test-no-llm
 
 - デフォルトモデル (`gemini-2.5-flash-lite`) は Gemini 無料枠 (15 RPM / 250K TPM / 1000 RPD)
 - セマンティックキャッシュ (Redis) で同一・類似クエリの API 呼び出しを削減
-- Embedding はローカル vLLM 実行で API 費用ゼロ
+- Embedding はデフォルトで Gemini 無料枠 (`gemini-embedding-001`, 100 RPM / 1,000 RPD)。ローカル vLLM に切替も可能
 - コスト追跡: `src/monitoring/cost_tracker.py` で日次コストを監視
 - アラート閾値: `COST_ALERT_THRESHOLD_DAILY_USD` (デフォルト: $10/日)
 

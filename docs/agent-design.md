@@ -36,21 +36,27 @@ Agent の実行エンジン。ReAct ループ全体を管理する。
 class AgentRuntime:
     def __init__(
         self,
-        planner: ReActPlanner,
+        llm_provider: LLMProvider,
+        model: str,
         tool_registry: ToolRegistry,
-        guardrails: Guardrails,
-        fallback_strategy: FallbackStrategy,
+        planner: ReActPlanner | None = None,
         max_steps: int = 10,
     ) -> None: ...
 
-    async def run(self, query: str) -> AgentResult: ...
+    async def run(
+        self, query: str, conversation_history: list[dict[str, str]] | None = None
+    ) -> AgentResult: ...
+
+    async def run_streaming(
+        self, query: str, conversation_history: list[dict[str, str]] | None = None
+    ) -> AsyncGenerator[AgentStepEvent | AgentAnswerStartEvent | AgentAnswerChunkEvent | AgentAnswerEndEvent | AgentAnswerEvent]: ...
 ```
 
 **AgentResult**:
 - `answer: str` — 最終回答
 - `steps: list[AgentStep]` — 各ステップの思考・行動・観察
-- `tool_calls: int` — ツール呼び出し回数
-- `stopped_reason: str` — 終了理由 ("completed" | "max_steps_reached")
+- `total_steps: int` — 実行ステップ数
+- `stopped_by_max_steps: bool` — max_steps に到達して停止したか
 
 ### AgentState (`src/agent/state.py`)
 
@@ -165,7 +171,6 @@ class ToolRegistry:
 |--------|--------|------|
 | `calculator` | `CalculatorTool` | AST ベースの安全な数式評価。`+`, `-`, `*`, `/`, `//`, `%`, `**` に対応。関数呼び出し・属性アクセスは AST レベルで拒否 |
 | `search` | `SearchTool` | RAGPipeline を使用したドキュメント検索。結果にソースチャンク引用を含む |
-| `database` | `DatabaseTool` | 読み取り専用 SQL クエリ。SELECT のみ許可、書き込み系キーワード・複数ステートメント・コメントを拒否。結果は JSON 形式、最大 100 行 |
 
 ## エラーハンドリング
 
@@ -181,6 +186,44 @@ AgentRuntime: LLM 直接回答へ切り替え
 AgentResult.stopped_reason = "tool_failure_degraded"
 ```
 
+## ストリーミング実行
+
+`run_streaming()` はトークン単位で Agent の実行過程をリアルタイム配信する AsyncGenerator。
+
+### イベント型
+
+| イベント | 説明 |
+|---------|------|
+| `AgentStepEvent` | ReAct ステップの完了通知 (thought, action, observation) |
+| `AgentAnswerStartEvent` | 最終回答のストリーミング開始 (thought を含む) |
+| `AgentAnswerChunkEvent` | 回答テキストの個別チャンク |
+| `AgentAnswerEndEvent` | ストリーミング回答の完了 (total_steps, sources, full_answer) |
+| `AgentAnswerEvent` | max-steps フォールバック時の一括回答 |
+
+### フロー
+
+```
+run_streaming(query, conversation_history)
+  ↓
+┌─────────────────────────────────────────────┐
+│  ReAct ループ (各ステップ)                    │
+│    → AgentStepEvent (thought + action + obs) │
+│    → 次のステップへ                            │
+├─────────────────────────────────────────────┤
+│  Final Answer 検出                           │
+│    → AgentAnswerStartEvent (thought)         │
+│    → AgentAnswerChunkEvent × N (トークン単位)  │
+│    → AgentAnswerEndEvent (完了)               │
+├─────────────────────────────────────────────┤
+│  max_steps 到達時                            │
+│    → AgentAnswerEvent (一括フォールバック)     │
+└─────────────────────────────────────────────┘
+```
+
+### 会話履歴
+
+`conversation_history` パラメータで過去の会話コンテキストを渡すことができる。`run()` / `run_streaming()` 共通。
+
 ## 設定パラメータ
 
 | パラメータ | デフォルト | 説明 |
@@ -190,4 +233,3 @@ AgentResult.stopped_reason = "tool_failure_degraded"
 | `max_input_tokens` | 4096 | 入力トークン上限 |
 | `max_output_tokens` | 4096 | 出力トークン上限 |
 | `search.top_k` | 5 | 検索ツールの返却チャンク数 |
-| `database.max_rows` | 100 | DB ツールの最大返却行数 |
